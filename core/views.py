@@ -107,10 +107,11 @@ def download(request):
         )
         return redirect(next_url)
 
-    folder_names = [settings.PUTIO_BASE_FOLDER]
     subfolder = settings.PUTIO_CONTENT_TYPE_FOLDERS.get(content_type)
     if subfolder:
-        folder_names.append(subfolder)
+        folder_names = [settings.PUTIO_BASE_FOLDER, subfolder]
+    else:
+        folder_names = [settings.PUTIO_UNCLASSIFIED_FOLDER]
     destination = "/".join(folder_names)
 
     try:

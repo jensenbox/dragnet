@@ -22,11 +22,14 @@ BITMAGNET_URL = env.str("BITMAGNET_URL", default="http://bitmagnet:3333")
 PUTIO_OAUTH_TOKEN = env.str("PUTIO_OAUTH_TOKEN", default="")
 # Transfers land under this put.io folder (rclone moves it to the media server).
 PUTIO_BASE_FOLDER = env.str("PUTIO_BASE_FOLDER", default="plex")
-# bitmagnet contentType → subfolder; anything unmapped goes to the base folder.
+# bitmagnet contentType → subfolder under the base folder.
 PUTIO_CONTENT_TYPE_FOLDERS = {
     "movie": "curated_movies",
     "tv_show": "tv_series",
 }
+# Unmapped content types go here, at the account root — deliberately OUTSIDE the
+# base folder so rclone doesn't move them to the media server before manual triage.
+PUTIO_UNCLASSIFIED_FOLDER = env.str("PUTIO_UNCLASSIFIED_FOLDER", default="unclassified")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

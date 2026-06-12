@@ -113,13 +113,18 @@ def test_download_movie_goes_to_curated_movies(client, user, settings):
 
 
 @responses.activate
-def test_download_unclassified_goes_to_base_folder(client, user, settings):
+def test_download_unclassified_goes_to_root_unclassified_folder(client, user, settings):
     settings.PUTIO_OAUTH_TOKEN = "test-token"
-    mock_putio_folders()
+    # Root listing has no "unclassified" folder yet, so it gets created.
+    responses.get(
+        putio.FILES_LIST_URL,
+        json={"status": "OK", "files": [{"id": 100, "file_type": "FOLDER", "name": "plex"}]},
+    )
+    responses.post(putio.CREATE_FOLDER_URL, json={"status": "OK", "file": {"id": 500}})
     responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 7}})
     client.post(reverse("download"), download_post_data(content_type=""))
-    assert DownloadRequest.objects.get().destination == "plex"
-    assert "save_parent_id=100" in responses.calls[-1].request.body
+    assert DownloadRequest.objects.get().destination == "unclassified"
+    assert "save_parent_id=500" in responses.calls[-1].request.body
 
 
 def test_download_rejects_non_magnet(client, user):
