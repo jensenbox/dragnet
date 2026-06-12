@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -83,6 +84,7 @@ def download(request):
     info_hash = request.POST.get("info_hash", "")
     title = request.POST.get("title", "")
     magnet_uri = request.POST.get("magnet_uri", "")
+    content_type = request.POST.get("content_type", "")
     size = request.POST.get("size") or None
     next_url = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
@@ -105,8 +107,15 @@ def download(request):
         )
         return redirect(next_url)
 
+    folder_names = [settings.PUTIO_BASE_FOLDER]
+    subfolder = settings.PUTIO_CONTENT_TYPE_FOLDERS.get(content_type)
+    if subfolder:
+        folder_names.append(subfolder)
+    destination = "/".join(folder_names)
+
     try:
-        transfer = putio.add_transfer(magnet_uri)
+        parent_id = putio.resolve_folder_path(folder_names)
+        transfer = putio.add_transfer(magnet_uri, save_parent_id=parent_id)
     except putio.PutioError as exc:
         DownloadRequest.objects.create(
             user=request.user,
@@ -114,6 +123,7 @@ def download(request):
             title=title,
             size=size,
             magnet_uri=magnet_uri,
+            destination=destination,
             status=DownloadRequest.Status.FAILED,
             error=str(exc),
         )
@@ -126,10 +136,11 @@ def download(request):
         title=title,
         size=size,
         magnet_uri=magnet_uri,
+        destination=destination,
         putio_transfer_id=transfer.get("id"),
         status=DownloadRequest.Status.SENT,
     )
-    messages.success(request, f"Sent “{title}” to put.io.")
+    messages.success(request, f"Sent “{title}” to put.io → {destination}/")
     return redirect(next_url)
 
 

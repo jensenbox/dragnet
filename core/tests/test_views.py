@@ -25,9 +25,28 @@ def download_post_data(**overrides):
         "title": "Westworld.S01.2160p.WEB-DL",
         "size": "50000000000",
         "magnet_uri": MAGNET,
+        "content_type": "tv_show",
     }
     data.update(overrides)
     return data
+
+
+def mock_putio_folders():
+    """Register folder listings: root (plex) then plex's children, in call order."""
+    responses.get(
+        putio.FILES_LIST_URL,
+        json={"status": "OK", "files": [{"id": 100, "file_type": "FOLDER", "name": "plex"}]},
+    )
+    responses.get(
+        putio.FILES_LIST_URL,
+        json={
+            "status": "OK",
+            "files": [
+                {"id": 200, "file_type": "FOLDER", "name": "curated_movies"},
+                {"id": 300, "file_type": "FOLDER", "name": "tv_series"},
+            ],
+        },
+    )
 
 
 def test_search_requires_login(client):
@@ -69,15 +88,38 @@ def test_search_shows_error_when_bitmagnet_down(client, user):
 
 
 @responses.activate
-def test_download_sends_to_putio_and_records(client, user, settings):
+def test_download_tv_show_goes_to_tv_series(client, user, settings):
     settings.PUTIO_OAUTH_TOKEN = "test-token"
+    mock_putio_folders()
     responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 7}})
-    response = client.post(reverse("download"), download_post_data())
+    response = client.post(reverse("download"), download_post_data(content_type="tv_show"))
     assert response.status_code == 302
     download_request = DownloadRequest.objects.get()
     assert download_request.user == user
     assert download_request.putio_transfer_id == 7
     assert download_request.status == DownloadRequest.Status.SENT
+    assert download_request.destination == "plex/tv_series"
+    assert "save_parent_id=300" in responses.calls[-1].request.body
+
+
+@responses.activate
+def test_download_movie_goes_to_curated_movies(client, user, settings):
+    settings.PUTIO_OAUTH_TOKEN = "test-token"
+    mock_putio_folders()
+    responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 7}})
+    client.post(reverse("download"), download_post_data(content_type="movie"))
+    assert DownloadRequest.objects.get().destination == "plex/curated_movies"
+    assert "save_parent_id=200" in responses.calls[-1].request.body
+
+
+@responses.activate
+def test_download_unclassified_goes_to_base_folder(client, user, settings):
+    settings.PUTIO_OAUTH_TOKEN = "test-token"
+    mock_putio_folders()
+    responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 7}})
+    client.post(reverse("download"), download_post_data(content_type=""))
+    assert DownloadRequest.objects.get().destination == "plex"
+    assert "save_parent_id=100" in responses.calls[-1].request.body
 
 
 def test_download_rejects_non_magnet(client, user):
@@ -111,6 +153,7 @@ def test_download_duplicate_with_force_resends(client, user, settings):
         magnet_uri=MAGNET,
         status=DownloadRequest.Status.SENT,
     )
+    mock_putio_folders()
     responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 8}})
     client.post(reverse("download"), download_post_data(force="1"))
     assert DownloadRequest.objects.count() == 2
@@ -119,6 +162,7 @@ def test_download_duplicate_with_force_resends(client, user, settings):
 @responses.activate
 def test_download_putio_failure_recorded(client, user, settings):
     settings.PUTIO_OAUTH_TOKEN = "test-token"
+    mock_putio_folders()
     responses.post(putio.TRANSFERS_ADD_URL, status=500, body="boom")
     client.post(reverse("download"), download_post_data())
     download_request = DownloadRequest.objects.get()

@@ -20,6 +20,13 @@ CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 # Dragnet-specific configuration
 BITMAGNET_URL = env.str("BITMAGNET_URL", default="http://bitmagnet:3333")
 PUTIO_OAUTH_TOKEN = env.str("PUTIO_OAUTH_TOKEN", default="")
+# Transfers land under this put.io folder (rclone moves it to the media server).
+PUTIO_BASE_FOLDER = env.str("PUTIO_BASE_FOLDER", default="plex")
+# bitmagnet contentType → subfolder; anything unmapped goes to the base folder.
+PUTIO_CONTENT_TYPE_FOLDERS = {
+    "movie": "curated_movies",
+    "tv_show": "tv_series",
+}
 
 INSTALLED_APPS = [
     "django.contrib.admin",

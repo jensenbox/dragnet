@@ -10,6 +10,7 @@
       <tr>
         <th>Title</th>
         <th class="text-nowrap">Size</th>
+        <th>Destination</th>
         <th>Sent by</th>
         <th class="text-nowrap">When</th>
         <th>Status</th>
@@ -20,6 +21,7 @@
       <tr>
         <td>{{ dr.title }}</td>
         <td class="text-nowrap">{% if dr.size %}{{ dr.size|filesizeformat }}{% else %}—{% endif %}</td>
+        <td>{% if dr.destination %}<code>{{ dr.destination }}/</code>{% else %}—{% endif %}</td>
         <td>{{ dr.user.username }}</td>
         <td class="text-nowrap">{{ dr.created_at|date:"Y-m-d H:i" }}</td>
         <td>
@@ -31,7 +33,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5" class="text-center text-secondary py-5">Nothing sent to put.io yet.</td></tr>
+      <tr><td colspan="6" class="text-center text-secondary py-5">Nothing sent to put.io yet.</td></tr>
       {% endfor %}
     </tbody>
   </table>

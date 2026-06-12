@@ -80,6 +80,7 @@
           <form method="post" action="{% url 'download' %}">
             {% csrf_token %}
             <input type="hidden" name="info_hash" value="{{ item.infoHash }}">
+            <input type="hidden" name="content_type" value="{{ item.contentType|default:'' }}">
             <input type="hidden" name="title" value="{{ item.torrent.name }}">
             <input type="hidden" name="size" value="{{ item.torrent.size }}">
             <input type="hidden" name="magnet_uri" value="{{ item.torrent.magnetUri }}">

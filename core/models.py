@@ -18,6 +18,7 @@ class DownloadRequest(models.Model):
     title = models.CharField(max_length=1024)
     size = models.BigIntegerField(null=True, blank=True)
     magnet_uri = models.TextField()
+    destination = models.CharField(max_length=255, blank=True, default="")
     putio_transfer_id = models.BigIntegerField(null=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.SENT)
     error = models.TextField(blank=True, default="")
