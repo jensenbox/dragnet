@@ -1,0 +1,114 @@
+{% extends "core/base.html" %}
+
+{% block title %}Search — Dragnet{% endblock %}
+
+{% block content %}
+<form method="get" class="row g-2 mb-4">
+  <div class="col-12 col-lg-4">
+    <input type="search" name="q" value="{{ query }}" class="form-control" placeholder="Search torrents… e.g. Westworld" autofocus>
+  </div>
+  <div class="col-6 col-lg-2">
+    <select name="content_type" class="form-select">
+      <option value="">Any type</option>
+      {% for value, label in content_types %}
+      <option value="{{ value }}" {% if value == content_type %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-lg-2">
+    <select name="resolution" class="form-select">
+      <option value="">Any resolution</option>
+      {% for value, label in video_resolutions %}
+      <option value="{{ value }}" {% if value == resolution %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-lg-1">
+    <input type="text" name="year" value="{{ year }}" class="form-control" placeholder="Year" inputmode="numeric" maxlength="4">
+  </div>
+  <div class="col-6 col-lg-2">
+    <select name="order" class="form-select">
+      {% for value, label in order_options %}
+      <option value="{{ value }}" {% if value == order %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-lg-1 d-grid">
+    <button type="submit" class="btn btn-primary">Search</button>
+  </div>
+</form>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% elif result %}
+<p class="text-secondary">
+  {{ result.totalCount }} result{{ result.totalCount|pluralize }}{% if result.totalCountIsEstimate %} (estimated){% endif %}
+</p>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th class="text-nowrap">Size</th>
+        <th class="text-nowrap" title="Seeders / Leechers">S / L</th>
+        <th class="text-nowrap">Published</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in result.items %}
+      <tr>
+        <td>
+          <div class="fw-semibold">{{ item.torrent.name }}</div>
+          <div class="small text-secondary">
+            {% if item.contentType %}<span class="badge text-bg-secondary">{{ item.contentType }}</span>{% endif %}
+            {% if item.videoResolution %}<span class="badge text-bg-info">{{ item.videoResolution|slice:"1:" }}</span>{% endif %}
+            {% if item.videoSource %}<span class="badge text-bg-dark border">{{ item.videoSource }}</span>{% endif %}
+            {% if item.episodes %}<span class="badge text-bg-dark border">{{ item.episodes.label }}</span>{% endif %}
+            {% if item.content.releaseYear %}<span>{{ item.content.releaseYear }}</span>{% endif %}
+            {% if item.torrent.filesCount %}<span>· {{ item.torrent.filesCount }} file{{ item.torrent.filesCount|pluralize }}</span>{% endif %}
+          </div>
+        </td>
+        <td class="text-nowrap">{{ item.torrent.size|filesizeformat }}</td>
+        <td class="text-nowrap">
+          <span class="text-success">{{ item.seeders|default:"?" }}</span> /
+          <span class="text-danger">{{ item.leechers|default:"?" }}</span>
+        </td>
+        <td class="text-nowrap">{{ item.publishedAt|date:"Y-m-d" }}</td>
+        <td class="text-end">
+          <form method="post" action="{% url 'download' %}">
+            {% csrf_token %}
+            <input type="hidden" name="info_hash" value="{{ item.infoHash }}">
+            <input type="hidden" name="title" value="{{ item.torrent.name }}">
+            <input type="hidden" name="size" value="{{ item.torrent.size }}">
+            <input type="hidden" name="magnet_uri" value="{{ item.torrent.magnetUri }}">
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            {% if item.sentRequest %}
+            <span class="badge text-bg-success" title="Sent by {{ item.sentRequest.user.username }} on {{ item.sentRequest.created_at|date:'Y-m-d' }}">✓ Sent</span>
+            <button type="submit" name="force" value="1" class="btn btn-sm btn-outline-secondary" title="Send to put.io again">↻</button>
+            {% else %}
+            <button type="submit" class="btn btn-sm btn-primary text-nowrap">Send to put.io</button>
+            {% endif %}
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-secondary py-5">
+        No results. The DHT index grows over time — popular content appears within hours of the crawler starting.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<nav class="d-flex gap-2 justify-content-center mb-5">
+  {% if page > 1 %}
+  <a class="btn btn-outline-secondary" href="?q={{ query|urlencode }}&content_type={{ content_type }}&resolution={{ resolution }}&video_source={{ video_source }}&year={{ year }}&order={{ order }}&page={{ page|add:'-1' }}">← Previous</a>
+  {% endif %}
+  {% if result.hasNextPage %}
+  <a class="btn btn-outline-secondary" href="?q={{ query|urlencode }}&content_type={{ content_type }}&resolution={{ resolution }}&video_source={{ video_source }}&year={{ year }}&order={{ order }}&page={{ page|add:'1' }}">Next →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

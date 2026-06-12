@@ -1,0 +1,60 @@
+services:
+  web:
+    image: ghcr.io/jensenbox/dragnet:latest
+    build: .
+    restart: unless-stopped
+    ports:
+      - "9180:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?}
+      DEBUG: ${DEBUG:-false}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-192.168.16.10,localhost}
+      TIME_ZONE: ${TIME_ZONE:-UTC}
+      BITMAGNET_URL: http://bitmagnet:3333
+      PUTIO_OAUTH_TOKEN: ${PUTIO_OAUTH_TOKEN:?}
+      SQLITE_PATH: /data/db.sqlite3
+      DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-}
+      DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}
+      DJANGO_SUPERUSER_EMAIL: ${DJANGO_SUPERUSER_EMAIL:-}
+    volumes:
+      - ./data/web:/data
+    depends_on:
+      - bitmagnet
+
+  bitmagnet:
+    image: ghcr.io/bitmagnet-io/bitmagnet:latest
+    restart: unless-stopped
+    # No host port for 3333: the web UI/API is unauthenticated, so it stays
+    # on the internal network. Reach it via an SSH tunnel when needed.
+    ports:
+      - "3334:3334/tcp"
+      - "3334:3334/udp"
+    command: ["worker", "run", "--keys=http_server", "--keys=queue_server", "--keys=dht_crawler"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: bitmagnet
+      # Family-facing index: drop adult content at classification time.
+      CLASSIFIER_DELETE_XXX: ${CLASSIFIER_DELETE_XXX:-true}
+      # TMDB v3 API key for richer movie/TV matching.
+      TMDB_API_KEY: ${TMDB_API_KEY:?}
+    volumes:
+      - ./config/bitmagnet:/root/.config/bitmagnet
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    shm_size: 1g
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: bitmagnet
+      PGUSER: postgres
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d bitmagnet"]
+      interval: 10s
+      start_period: 30s

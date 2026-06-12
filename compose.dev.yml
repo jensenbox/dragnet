@@ -1,0 +1,16 @@
+# Local development override:
+#   docker compose -f docker-compose.yml -f compose.dev.yml up --build
+services:
+  web:
+    build: .
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    entrypoint: []
+    environment:
+      DEBUG: "true"
+      SECRET_KEY: dev-only-secret-key
+      ALLOWED_HOSTS: "*"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./data/web:/data

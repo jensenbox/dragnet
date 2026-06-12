@@ -1,0 +1,39 @@
+{% extends "core/base.html" %}
+
+{% block title %}History — Dragnet{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4">Download history</h1>
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th class="text-nowrap">Size</th>
+        <th>Sent by</th>
+        <th class="text-nowrap">When</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dr in download_requests %}
+      <tr>
+        <td>{{ dr.title }}</td>
+        <td class="text-nowrap">{% if dr.size %}{{ dr.size|filesizeformat }}{% else %}—{% endif %}</td>
+        <td>{{ dr.user.username }}</td>
+        <td class="text-nowrap">{{ dr.created_at|date:"Y-m-d H:i" }}</td>
+        <td>
+          {% if dr.status == "sent" %}
+          <span class="badge text-bg-success">Sent</span>
+          {% else %}
+          <span class="badge text-bg-danger" title="{{ dr.error }}">Failed</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-secondary py-5">Nothing sent to put.io yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
