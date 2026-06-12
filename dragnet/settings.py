@@ -30,6 +30,10 @@ PUTIO_CONTENT_TYPE_FOLDERS = {
 # Unmapped content types go here, at the account root — deliberately OUTSIDE the
 # base folder so rclone doesn't move them to the media server before manual triage.
 PUTIO_UNCLASSIFIED_FOLDER = env.str("PUTIO_UNCLASSIFIED_FOLDER", default="unclassified")
+# Bearer token for the JSON API (POST /api/download/); API is disabled while unset.
+DRAGNET_API_TOKEN = env.str("DRAGNET_API_TOKEN", default="")
+# API sends are attributed to this Django user (auto-created, no password login).
+DRAGNET_API_USERNAME = env.str("DRAGNET_API_USERNAME", default="claude")
 
 INSTALLED_APPS = [
     "django.contrib.admin",

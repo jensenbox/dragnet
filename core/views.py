@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
@@ -8,7 +7,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from . import bitmagnet, putio
+from . import bitmagnet, putio, services
 from .models import DownloadRequest
 
 
@@ -94,54 +93,27 @@ def download(request):
         messages.error(request, "Invalid download request.")
         return redirect(next_url)
 
-    existing = (
-        DownloadRequest.objects.filter(info_hash=info_hash, status=DownloadRequest.Status.SENT)
-        .select_related("user")
-        .first()
-    )
-    if existing and not request.POST.get("force"):
-        messages.warning(
-            request,
-            f"“{existing.title}” was already sent to put.io by {existing.user.username} "
-            f"on {existing.created_at:%Y-%m-%d}. Use the re-send button to send it again.",
-        )
-        return redirect(next_url)
-
-    subfolder = settings.PUTIO_CONTENT_TYPE_FOLDERS.get(content_type)
-    if subfolder:
-        folder_names = [settings.PUTIO_BASE_FOLDER, subfolder]
-    else:
-        folder_names = [settings.PUTIO_UNCLASSIFIED_FOLDER]
-    destination = "/".join(folder_names)
-
     try:
-        parent_id = putio.resolve_folder_path(folder_names)
-        transfer = putio.add_transfer(magnet_uri, save_parent_id=parent_id)
-    except putio.PutioError as exc:
-        DownloadRequest.objects.create(
-            user=request.user,
+        download_request = services.send_download(
+            request.user,
             info_hash=info_hash,
             title=title,
-            size=size,
             magnet_uri=magnet_uri,
-            destination=destination,
-            status=DownloadRequest.Status.FAILED,
-            error=str(exc),
+            content_type=content_type,
+            size=size,
+            force=bool(request.POST.get("force")),
         )
+    except services.DuplicateDownload as exc:
+        messages.warning(
+            request,
+            f"“{exc.existing.title}” was {exc}. Use the re-send button to send it again.",
+        )
+        return redirect(next_url)
+    except putio.PutioError as exc:
         messages.error(request, f"put.io rejected the transfer: {exc}")
         return redirect(next_url)
 
-    DownloadRequest.objects.create(
-        user=request.user,
-        info_hash=info_hash,
-        title=title,
-        size=size,
-        magnet_uri=magnet_uri,
-        destination=destination,
-        putio_transfer_id=transfer.get("id"),
-        status=DownloadRequest.Status.SENT,
-    )
-    messages.success(request, f"Sent “{title}” to put.io → {destination}/")
+    messages.success(request, f"Sent “{title}” to put.io → {download_request.destination}/")
     return redirect(next_url)
 
 
