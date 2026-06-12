@@ -7,6 +7,7 @@ COPY . .
 RUN uv sync --frozen --no-dev
 
 FROM python:3.13-slim-bookworm
+LABEL org.opencontainers.image.source="https://github.com/jensenbox/dragnet"
 RUN useradd --create-home app
 WORKDIR /app
 COPY --from=builder --chown=app:app /app /app
