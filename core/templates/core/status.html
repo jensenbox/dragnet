@@ -1,0 +1,82 @@
+{% extends "core/base.html" %}
+
+{% block title %}Status — Dragnet{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-2">Crawler status</h1>
+<p class="text-secondary mb-4">
+  The DHT has no "in sync" point — the index simply grows as the crawler discovers
+  torrents. Backlog is metadata waiting to be fetched and classified.
+</p>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% else %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-semibold">{{ crawler.totalTorrents|default:0 }}{% if crawler.totalIsEstimate %}<span class="fs-6 text-secondary"> ~</span>{% endif %}</div>
+        <div class="text-secondary">torrents indexed</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-semibold">{{ crawler.lastHour }}</div>
+        <div class="text-secondary">new this hour</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-semibold">{{ crawler.last24h }}</div>
+        <div class="text-secondary">new in 24 h</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <div class="fs-3 fw-semibold">{{ crawler.queueBacklog }}</div>
+        <div class="text-secondary">queue backlog</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <h2 class="h6 text-secondary">New torrents per hour (last 24 h)</h2>
+    <div class="d-flex align-items-end gap-1" style="height: 120px;">
+      {% for point in crawler.hourly %}
+      <div class="bg-info rounded-top flex-fill" style="height: {{ point.percent }}%; min-height: 2px;"
+           title="{{ point.bucket|date:'M j, H:00' }} — {{ point.count }} torrents"></div>
+      {% empty %}
+      <span class="text-secondary">No data yet.</span>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% if crawler.backlogByQueue %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h2 class="h6 text-secondary">Backlog by queue (pending + retry)</h2>
+    <table class="table table-sm mb-0">
+      {% for queue in crawler.backlogByQueue %}
+      <tr><td>{{ queue.label }}</td><td class="text-end">{{ queue.count }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+<p class="text-secondary">
+  Full crawler dashboard (throughput charts, per-queue detail):
+  <a href="{{ dashboard_url }}">{{ dashboard_url }}</a>
+</p>
+{% endblock %}

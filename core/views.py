@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -128,6 +131,22 @@ def download(request):
     )
     messages.success(request, f"Sent “{title}” to put.io.")
     return redirect(next_url)
+
+
+@login_required
+def status(request):
+    crawler = None
+    error = None
+    try:
+        crawler = bitmagnet.status(since=timezone.now() - timedelta(hours=24))
+    except bitmagnet.BitmagnetError as exc:
+        error = str(exc)
+    dashboard_url = f"http://{request.get_host().split(':')[0]}:3333"
+    return render(
+        request,
+        "core/status.html",
+        {"crawler": crawler, "error": error, "dashboard_url": dashboard_url},
+    )
 
 
 @login_required

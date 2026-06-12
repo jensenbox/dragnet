@@ -72,6 +72,45 @@ query Search($input: TorrentContentSearchQueryInput!) {
 """
 
 
+STATUS_QUERY = """
+query Status($since: DateTime!) {
+  torrentContent {
+    search(input: {limit: 0, totalCount: true, cached: true}) {
+      totalCount
+      totalCountIsEstimate
+    }
+  }
+  torrent {
+    metrics(input: {bucketDuration: hour, startTime: $since}) {
+      buckets {
+        bucket
+        updated
+        count
+      }
+    }
+  }
+  queue {
+    jobs(
+      input: {
+        statuses: [pending, retry]
+        limit: 0
+        totalCount: true
+        facets: {queue: {aggregate: true}}
+      }
+    ) {
+      totalCount
+      aggregations {
+        queue {
+          label
+          count
+        }
+      }
+    }
+  }
+}
+"""
+
+
 class BitmagnetError(Exception):
     """The bitmagnet GraphQL API returned an error or was unreachable."""
 
@@ -113,16 +152,12 @@ def build_search_input(
     return search_input
 
 
-def search(search_input: dict[str, Any]) -> dict[str, Any]:
-    """Run a torrentContent search and return the result payload.
-
-    Returns the dict at data.torrentContent.search, with each item's
-    publishedAt parsed into a datetime for template rendering.
-    """
+def execute(query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    """POST a GraphQL document to bitmagnet and return the data payload."""
     try:
         response = requests.post(
             f"{settings.BITMAGNET_URL}/graphql",
-            json={"query": SEARCH_QUERY, "variables": {"input": search_input}},
+            json={"query": query, "variables": variables},
             timeout=30,
         )
     except requests.RequestException as exc:
@@ -134,10 +169,52 @@ def search(search_input: dict[str, Any]) -> dict[str, Any]:
     payload = response.json()
     if payload.get("errors"):
         raise BitmagnetError(f"bitmagnet GraphQL errors: {payload['errors']}")
+    return payload["data"]
 
-    result = payload["data"]["torrentContent"]["search"]
+
+def search(search_input: dict[str, Any]) -> dict[str, Any]:
+    """Run a torrentContent search and return the result payload.
+
+    Returns the dict at data.torrentContent.search, with each item's
+    publishedAt parsed into a datetime for template rendering.
+    """
+    data = execute(SEARCH_QUERY, {"input": search_input})
+    result = data["torrentContent"]["search"]
     for item in result["items"]:
         published_at = item.get("publishedAt")
         if published_at:
             item["publishedAt"] = datetime.fromisoformat(published_at)
     return result
+
+
+def status(since: datetime) -> dict[str, Any]:
+    """Crawler health snapshot: index size, hourly ingest, queue backlog.
+
+    Returns hourly buckets of *new* torrents (updated=false) summed across
+    sources, ordered oldest-first, alongside index totals and the pending+
+    retry queue backlog per queue.
+    """
+    data = execute(STATUS_QUERY, {"since": since.isoformat()})
+
+    hourly: dict[datetime, int] = {}
+    for bucket in data["torrent"]["metrics"]["buckets"]:
+        if bucket["updated"]:
+            continue
+        bucket_time = datetime.fromisoformat(bucket["bucket"])
+        hourly[bucket_time] = hourly.get(bucket_time, 0) + bucket["count"]
+    hourly_series = [{"bucket": b, "count": c} for b, c in sorted(hourly.items())]
+    max_hourly = max((point["count"] for point in hourly_series), default=0)
+    for point in hourly_series:
+        point["percent"] = round(100 * point["count"] / max_hourly) if max_hourly else 0
+
+    queue_jobs = data["queue"]["jobs"]
+    search_result = data["torrentContent"]["search"]
+    return {
+        "totalTorrents": search_result["totalCount"],
+        "totalIsEstimate": search_result["totalCountIsEstimate"],
+        "hourly": hourly_series,
+        "lastHour": hourly_series[-1]["count"] if hourly_series else 0,
+        "last24h": sum(point["count"] for point in hourly_series),
+        "queueBacklog": queue_jobs["totalCount"],
+        "backlogByQueue": queue_jobs["aggregations"]["queue"] or [],
+    }

@@ -126,6 +126,26 @@ def test_download_putio_failure_recorded(client, user, settings):
     assert "500" in download_request.error
 
 
+@responses.activate
+def test_status_renders(client, user):
+    from core.tests.test_bitmagnet import status_payload
+
+    responses.post(GRAPHQL_URL, json=status_payload())
+    response = client.get(reverse("status"))
+    content = response.content.decode()
+    assert "torrents indexed" in content
+    assert "5000" in content
+    assert "queue backlog" in content
+
+
+@responses.activate
+def test_status_shows_error_when_bitmagnet_down(client, user):
+    responses.post(GRAPHQL_URL, status=502, body="bad gateway")
+    response = client.get(reverse("status"))
+    assert response.status_code == 200
+    assert "502" in response.content.decode()
+
+
 def test_history_lists_requests(client, user):
     DownloadRequest.objects.create(
         user=user,

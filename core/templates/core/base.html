@@ -16,6 +16,7 @@
     <ul class="navbar-nav me-auto">
       <li class="nav-item"><a class="nav-link" href="{% url 'search' %}">Search</a></li>
       <li class="nav-item"><a class="nav-link" href="{% url 'history' %}">History</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'status' %}">Status</a></li>
       {% if user.is_staff %}
       <li class="nav-item"><a class="nav-link" href="{% url 'admin:index' %}">Admin</a></li>
       {% endif %}

@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 import responses
 from django.conf import settings
@@ -124,3 +126,47 @@ def test_search_connection_error_raises():
     responses.post(GRAPHQL_URL, body=responses.ConnectionError())
     with pytest.raises(bitmagnet.BitmagnetError, match="unreachable"):
         bitmagnet.search(bitmagnet.build_search_input(query="x"))
+
+
+def status_payload():
+    return {
+        "data": {
+            "torrentContent": {"search": {"totalCount": 5000, "totalCountIsEstimate": True}},
+            "torrent": {
+                "metrics": {
+                    "buckets": [
+                        # new torrents, two sources in the same hour bucket
+                        {"bucket": "2026-06-12T01:00:00Z", "updated": False, "count": 300},
+                        {"bucket": "2026-06-12T01:00:00Z", "updated": False, "count": 100},
+                        {"bucket": "2026-06-12T02:00:00Z", "updated": False, "count": 200},
+                        # updates are not "new" and must be excluded
+                        {"bucket": "2026-06-12T02:00:00Z", "updated": True, "count": 999},
+                    ]
+                }
+            },
+            "queue": {
+                "jobs": {
+                    "totalCount": 42,
+                    "aggregations": {
+                        "queue": [{"label": "process_torrent", "count": 42}],
+                    },
+                }
+            },
+        }
+    }
+
+
+@responses.activate
+def test_status_aggregates_metrics():
+    responses.post(GRAPHQL_URL, json=status_payload())
+    result = bitmagnet.status(since=datetime(2026, 6, 11, 2, 0, tzinfo=UTC))
+    assert result["totalTorrents"] == 5000
+    assert result["totalIsEstimate"] is True
+    # sources summed within a bucket; updated=True excluded; oldest first
+    assert [point["count"] for point in result["hourly"]] == [400, 200]
+    assert result["lastHour"] == 200
+    assert result["last24h"] == 600
+    assert result["hourly"][0]["percent"] == 100
+    assert result["hourly"][1]["percent"] == 50
+    assert result["queueBacklog"] == 42
+    assert result["backlogByQueue"][0]["label"] == "process_torrent"
