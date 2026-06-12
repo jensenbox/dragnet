@@ -38,11 +38,17 @@ docker compose -f docker-compose.yml -f compose.dev.yml up --build
 
 ## Deployment (192.168.16.10)
 
-Lives at `/opt/stacks/dragnet/` following the usual stacks pattern:
+`/opt/stacks/dragnet/` is a **git checkout of this repo** — `docker-compose.yml` comes
+from git, while `.env`, `data/` and `config/` are untracked local state. The nightly
+`update-everything.sh` does `git pull --ff-only` on git-managed stack dirs before
+`docker compose pull`, so both compose changes and new images deploy automatically.
+
+Fresh setup:
 
 ```bash
-mkdir -p /opt/stacks/dragnet && cd /opt/stacks/dragnet
-# copy docker-compose.yml from this repo, create .env from .env.example
+git clone https://github.com/jensenbox/dragnet.git /opt/stacks/dragnet
+cd /opt/stacks/dragnet
+# create .env from .env.example
 mkdir -p data/web && chown 1000:1000 data/web   # SQLite volume, written by uid 1000
 docker compose up -d
 ```
