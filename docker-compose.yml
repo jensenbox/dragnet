@@ -24,9 +24,10 @@ services:
   bitmagnet:
     image: ghcr.io/bitmagnet-io/bitmagnet:latest
     restart: unless-stopped
-    # No host port for 3333: the web UI/API is unauthenticated, so it stays
-    # on the internal network. Reach it via an SSH tunnel when needed.
+    # 3333 (unauthenticated UI/API) binds to loopback only — reach it via
+    # SSH tunnel: ssh -L 3333:localhost:3333 <host>, then open localhost:3333.
     ports:
+      - "127.0.0.1:3333:3333"
       - "3334:3334/tcp"
       - "3334:3334/udp"
     command: ["worker", "run", "--keys=http_server", "--keys=queue_server", "--keys=dht_crawler"]
