@@ -57,6 +57,6 @@ bootstrapped from `DJANGO_SUPERUSER_*` in `.env`).
 
 - The DHT index starts empty; popular content appears within hours, the long tail
   builds over days/weeks. Postgres grows to tens of GB over months.
-- bitmagnet dashboard (crawler throughput, queue backlog, torrent metrics) binds to
-  loopback only: `ssh -L 3333:localhost:3333 192.168.16.10`, then open http://localhost:3333.
+- bitmagnet dashboard (crawler throughput, queue backlog, torrent metrics):
+  http://192.168.16.10:3333 — no auth, LAN-trusted only; never port-forward it.
 - Secrets live only in `/opt/stacks/dragnet/.env` (see `.env.example`).
