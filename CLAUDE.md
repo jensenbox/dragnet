@@ -100,7 +100,9 @@ uv run ruff check . && uv run ruff format .
 
 Deploy: push to `main` → CI builds `ghcr.io/jensenbox/dragnet:latest` →
 `update-everything.sh` on the server auto-pulls nightly. For an immediate deploy:
-`ssh 192.168.16.10 'cd /opt/stacks/dragnet && docker compose pull && docker compose up -d'`
+`ssh 192.168.16.10 'cd /opt/stacks/dragnet && git pull --ff-only && docker compose pull && docker compose up -d'`
+(the `git pull` matters: the compose file itself is versioned, so without it the
+new image runs under the old compose and never sees new environment variables)
 (wait for CI to finish first).
 
 Secrets live only in `/opt/stacks/dragnet/.env`. SQLite (download history) is the

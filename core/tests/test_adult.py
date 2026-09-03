@@ -143,3 +143,50 @@ def test_adult_search_query_requests_only_adult_content(client, adult_user):
     client.get(reverse("adult_search"), {"q": "anything"})
     sent = responses.calls[0].request.body.decode()
     assert '"filter": ["xxx"]' in sent.replace("'", '"')
+
+
+# --- history isolation -----------------------------------------------------
+
+
+def _make_adult_row(user, settings):
+    return DownloadRequest.objects.create(
+        user=user,
+        info_hash="e" * 40,
+        title="Some Adult Title That Must Not Leak",
+        magnet_uri=MAGNET,
+        destination=settings.PUTIO_ADULT_FOLDER,
+    )
+
+
+def _make_family_row(user, settings):
+    return DownloadRequest.objects.create(
+        user=user,
+        info_hash="f" * 40,
+        title="Westworld S01",
+        magnet_uri=MAGNET,
+        destination=f"{settings.PUTIO_BASE_FOLDER}/tv_series",
+    )
+
+
+def test_history_hides_adult_sends_from_the_rest_of_the_family(client, plain_user, settings):
+    """The shared log is read by everyone; adult titles must not appear on it."""
+    _make_adult_row(plain_user, settings)
+    _make_family_row(plain_user, settings)
+
+    body = client.get(reverse("history")).content.decode()
+    assert "Some Adult Title That Must Not Leak" not in body
+    assert "Westworld S01" in body
+
+
+def test_history_shows_adult_sends_to_permitted_users(client, adult_user, settings):
+    _make_adult_row(adult_user, settings)
+    _make_family_row(adult_user, settings)
+
+    body = client.get(reverse("history")).content.decode()
+    assert "Some Adult Title That Must Not Leak" in body
+    assert "Westworld S01" in body
+
+
+def test_adult_destination_tracks_the_routing_rules(settings):
+    """The history filter must keep matching wherever adult sends actually go."""
+    assert services.adult_destination() == "/".join(services.destination_folders("xxx"))

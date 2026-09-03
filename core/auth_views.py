@@ -34,5 +34,5 @@ def logout_view(request):
     logout(request)
     if came_via_access:
         # Clear the Cloudflare session too, or the visitor is instantly back in.
-        return redirect(cfaccess.logout_url())
+        return redirect(cfaccess.LOGOUT_PATH)
     return redirect("login")

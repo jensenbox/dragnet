@@ -40,6 +40,16 @@ def destination_folders(content_type: str) -> list[str]:
     return [settings.PUTIO_UNCLASSIFIED_FOLDER]
 
 
+def adult_destination() -> str:
+    """The stored `destination` of an adult send.
+
+    History has no content type to filter on, so it identifies adult rows by
+    where they were routed. Deriving it from destination_folders() keeps the two
+    from drifting apart if the routing rules change.
+    """
+    return "/".join(destination_folders(ADULT_CONTENT_TYPE))
+
+
 def send_download(
     user,
     *,

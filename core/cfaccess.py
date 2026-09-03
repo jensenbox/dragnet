@@ -44,9 +44,12 @@ def certs_url() -> str:
     return f"{issuer()}/cdn-cgi/access/certs"
 
 
-def logout_url() -> str:
-    """Cloudflare's own logout endpoint — clears the Access session, not just Django's."""
-    return f"{issuer()}/cdn-cgi/access/logout"
+# Cloudflare intercepts this path at the edge on the application's own hostname.
+# Access has no per-application logout — this revokes the session across every
+# Access app either way — but going via the app's own domain clears the cookie
+# the visitor is actually holding, and keeps logout working without knowing the
+# team domain.
+LOGOUT_PATH = "/cdn-cgi/access/logout"
 
 
 def _get_jwk_client() -> jwt.PyJWKClient:

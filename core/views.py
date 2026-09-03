@@ -174,5 +174,13 @@ def status(request):
 
 @login_required
 def history(request):
-    requests_list = DownloadRequest.objects.select_related("user").all()[:500]
-    return render(request, "core/history.html", {"download_requests": requests_list})
+    """The shared download log.
+
+    Adult sends are hidden from anyone without the adult permission — otherwise
+    the titles would show up on a page the whole family reads, which is exactly
+    what keeping adult content in a separate section is meant to prevent.
+    """
+    requests_list = DownloadRequest.objects.select_related("user")
+    if not request.user.has_perm(ADULT_PERMISSION):
+        requests_list = requests_list.exclude(destination=services.adult_destination())
+    return render(request, "core/history.html", {"download_requests": requests_list[:500]})
