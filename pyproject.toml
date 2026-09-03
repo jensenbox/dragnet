@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Family torrent search over a self-hosted DHT index, with one-click send to put.io"
 requires-python = ">=3.12"
 dependencies = [
-    "django>=6.0.6",
+    "django>=6.0.7,<6.1",
     "environs>=15.0.1",
     "gunicorn>=26.0.0",
     "pyjwt[crypto]>=2.10",
