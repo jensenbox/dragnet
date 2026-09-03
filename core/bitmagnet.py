@@ -18,15 +18,28 @@ ORDER_FIELDS = {
     "relevance": "relevance",
 }
 
+# The bitmagnet contentType that the adult section owns exclusively. It is
+# filtered out of every other search, and is the only type the adult section
+# shows.
+ADULT_CONTENT_TYPE = "xxx"
+
 CONTENT_TYPES = [
     ("movie", "Movies"),
     ("tv_show", "TV Shows"),
     ("music", "Music"),
     ("audiobook", "Audiobooks"),
     ("ebook", "Ebooks"),
+    ("comic", "Comics"),
     ("software", "Software"),
     ("game", "Games"),
 ]
+
+# Every non-adult contentType, plus None for torrents the classifier could not
+# type at all. bitmagnet has no "exclude" facet — a filter is an allow-list — so
+# excluding xxx means naming everything else. None matters: unclassified is the
+# single largest bucket in the index (~4.5M of 8.3M), and omitting it here would
+# hide most of the index from search.
+NON_ADULT_CONTENT_TYPES = [value for value, _ in CONTENT_TYPES] + [None]
 
 VIDEO_RESOLUTIONS = [
     ("V2160p", "2160p (4K)"),
@@ -123,10 +136,22 @@ def build_search_input(
     year: str = "",
     order: str = "seeders",
     page: int = 1,
+    adult: bool = False,
 ) -> dict[str, Any]:
+    """Build the GraphQL search input.
+
+    `adult` switches which side of the content split is searched, and is never
+    caller-optional in effect: with adult=False the contentType facet is always
+    pinned to the non-adult allow-list, so no code path can return xxx results
+    into the family-facing UI.
+    """
     facets: dict[str, Any] = {}
-    if content_type:
+    if adult:
+        facets["contentType"] = {"filter": [ADULT_CONTENT_TYPE]}
+    elif content_type and content_type != ADULT_CONTENT_TYPE:
         facets["contentType"] = {"filter": [content_type]}
+    else:
+        facets["contentType"] = {"filter": NON_ADULT_CONTENT_TYPES}
     if resolution:
         facets["videoResolution"] = {"filter": [resolution]}
     if video_source:

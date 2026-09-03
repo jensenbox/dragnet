@@ -55,7 +55,8 @@ def test_build_search_input_defaults():
     assert search_input["limit"] == bitmagnet.PAGE_SIZE
     assert search_input["offset"] == 0
     assert search_input["orderBy"] == [{"field": "seeders", "descending": True}]
-    assert "facets" not in search_input
+    # Non-adult search always pins the content-type facet to the allow-list.
+    assert search_input["facets"]["contentType"]["filter"] == bitmagnet.NON_ADULT_CONTENT_TYPES
 
 
 def test_build_search_input_empty_query_is_none():
@@ -170,3 +171,36 @@ def test_status_aggregates_metrics():
     assert result["hourly"][1]["percent"] == 50
     assert result["queueBacklog"] == 42
     assert result["backlogByQueue"][0]["label"] == "process_torrent"
+
+
+def test_non_adult_search_excludes_xxx_but_keeps_unclassified():
+    """The allow-list must exclude xxx and still include None.
+
+    None is ~4.5M of the 8.3M-row index; dropping it would hide most of the
+    index from every family search.
+    """
+    facet = bitmagnet.build_search_input()["facets"]["contentType"]["filter"]
+    assert bitmagnet.ADULT_CONTENT_TYPE not in facet
+    assert None in facet
+    assert "movie" in facet
+
+
+def test_adult_search_returns_only_xxx():
+    facet = bitmagnet.build_search_input(adult=True)["facets"]["contentType"]["filter"]
+    assert facet == [bitmagnet.ADULT_CONTENT_TYPE]
+
+
+def test_content_type_filter_cannot_smuggle_xxx_into_family_search():
+    """A crafted ?content_type=xxx must fall back to the allow-list, not pass through."""
+    facet = bitmagnet.build_search_input(content_type="xxx")["facets"]["contentType"]["filter"]
+    assert facet == bitmagnet.NON_ADULT_CONTENT_TYPES
+
+
+def test_content_type_filter_still_narrows_for_normal_types():
+    facet = bitmagnet.build_search_input(content_type="movie")["facets"]["contentType"]["filter"]
+    assert facet == ["movie"]
+
+
+def test_adult_search_ignores_content_type_filter():
+    search_input = bitmagnet.build_search_input(content_type="movie", adult=True)
+    assert search_input["facets"]["contentType"]["filter"] == [bitmagnet.ADULT_CONTENT_TYPE]

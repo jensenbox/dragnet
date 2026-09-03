@@ -9,9 +9,16 @@ services:
       SECRET_KEY: ${SECRET_KEY:?}
       DEBUG: ${DEBUG:-false}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-192.168.16.10,localhost}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      SECURE_COOKIES: ${SECURE_COOKIES:-false}
+      SECURE_HSTS_SECONDS: ${SECURE_HSTS_SECONDS:-0}
       TIME_ZONE: ${TIME_ZONE:-UTC}
       BITMAGNET_URL: http://bitmagnet:3333
+      BITMAGNET_DASHBOARD_URL: ${BITMAGNET_DASHBOARD_URL:-}
       PUTIO_OAUTH_TOKEN: ${PUTIO_OAUTH_TOKEN:?}
+      PUTIO_ADULT_FOLDER: ${PUTIO_ADULT_FOLDER:-adult}
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
       DRAGNET_API_TOKEN: ${DRAGNET_API_TOKEN:-}
       SQLITE_PATH: /data/db.sqlite3
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-}
@@ -21,6 +28,26 @@ services:
       - ./data/web:/data
     depends_on:
       - bitmagnet
+
+  # Publishes the web app at https://dragnet.jensenbox.com. The hostname →
+  # service mapping lives in the Cloudflare Zero Trust dashboard (this is a
+  # remotely-managed tunnel), which is also where the Access policy that
+  # authenticates family members is configured.
+  #
+  # Guarded by a profile so the stack still comes up on a host that has no
+  # tunnel token: the nightly update-everything.sh runs a plain `compose up -d`,
+  # and an unset TUNNEL_TOKEN would otherwise crash-loop this container. Enable
+  # with COMPOSE_PROFILES=tunnel in .env once CF_TUNNEL_TOKEN is set.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared-dragnet
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
 
   bitmagnet:
     image: ghcr.io/bitmagnet-io/bitmagnet:latest
@@ -36,8 +63,14 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: bitmagnet
-      # Family-facing index: drop adult content at classification time.
-      CLASSIFIER_DELETE_XXX: ${CLASSIFIER_DELETE_XXX:-true}
+      # Adult content is indexed (not deleted) so the gated /adult/ section has
+      # something to search; the Django app excludes it from family search at
+      # the query level. Note the one-way door: with this true, bitmagnet adds
+      # every adult infohash to the `blocked_torrents` bloom filter and will
+      # never re-crawl it, so time spent with it on is index history lost for
+      # good. Do NOT clear that bloom filter to recover it — it also holds
+      # torrents deleted by the classifier's banned-keywords rule.
+      CLASSIFIER_DELETE_XXX: ${CLASSIFIER_DELETE_XXX:-false}
       # TMDB v3 API key for richer movie/TV matching.
       TMDB_API_KEY: ${TMDB_API_KEY:?}
     volumes:

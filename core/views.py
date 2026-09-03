@@ -1,7 +1,8 @@
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, permission_required
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -10,9 +11,23 @@ from django.views.decorators.http import require_POST
 from . import bitmagnet, putio, services
 from .models import DownloadRequest
 
+ADULT_PERMISSION = "core.view_adult_content"
+
 
 @login_required
 def search(request):
+    """Family-facing search. Adult content is excluded at the query level."""
+    return _render_search(request, adult=False)
+
+
+@login_required
+@permission_required(ADULT_PERMISSION, raise_exception=True)
+def adult_search(request):
+    """The adult section: a separate URL that only ever returns xxx results."""
+    return _render_search(request, adult=True)
+
+
+def _render_search(request, *, adult: bool):
     query = request.GET.get("q", "").strip()
     content_type = request.GET.get("content_type", "")
     resolution = request.GET.get("resolution", "")
@@ -37,6 +52,7 @@ def search(request):
             year=year,
             order=order,
             page=page,
+            adult=adult,
         )
         result = bitmagnet.search(search_input)
     except bitmagnet.BitmagnetError as exc:
@@ -54,6 +70,8 @@ def search(request):
             item["sentRequest"] = sent.get(item["infoHash"])
 
     context = {
+        "adult": adult,
+        "adult_folder": settings.PUTIO_ADULT_FOLDER,
         "query": query,
         "content_type": content_type,
         "resolution": resolution,
@@ -77,17 +95,18 @@ def search(request):
     return render(request, "core/search.html", context)
 
 
-@require_POST
-@login_required
-def download(request):
+def _send(request, *, adult: bool):
+    """Shared POST handler for both sections; `adult` only picks the redirect target."""
+
     info_hash = request.POST.get("info_hash", "")
     title = request.POST.get("title", "")
     magnet_uri = request.POST.get("magnet_uri", "")
     content_type = request.POST.get("content_type", "")
     size = request.POST.get("size") or None
     next_url = request.POST.get("next", "")
+    fallback = "adult_search" if adult else "search"
     if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
-        next_url = "search"
+        next_url = fallback
 
     if not magnet_uri.startswith("magnet:?") or not info_hash or not title:
         messages.error(request, "Invalid download request.")
@@ -103,6 +122,9 @@ def download(request):
             size=size,
             force=bool(request.POST.get("force")),
         )
+    except services.AdultContentNotPermitted:
+        messages.error(request, "You do not have permission to send adult content.")
+        return redirect(next_url)
     except services.DuplicateDownload as exc:
         messages.warning(
             request,
@@ -117,6 +139,19 @@ def download(request):
     return redirect(next_url)
 
 
+@require_POST
+@login_required
+def download(request):
+    return _send(request, adult=False)
+
+
+@require_POST
+@login_required
+@permission_required(ADULT_PERMISSION, raise_exception=True)
+def adult_download(request):
+    return _send(request, adult=True)
+
+
 @login_required
 def status(request):
     crawler = None
@@ -125,7 +160,11 @@ def status(request):
         crawler = bitmagnet.status(since=timezone.now() - timedelta(hours=24))
     except bitmagnet.BitmagnetError as exc:
         error = str(exc)
-    dashboard_url = f"http://{request.get_host().split(':')[0]}:3333"
+    # bitmagnet's dashboard has no auth and is LAN-only; deriving it from the
+    # request host would render a dead http://dragnet.jensenbox.com:3333 link
+    # for anyone arriving through the tunnel. Show it to staff only, and only
+    # when an explicit LAN URL is configured.
+    dashboard_url = settings.BITMAGNET_DASHBOARD_URL if request.user.is_staff else ""
     return render(
         request,
         "core/status.html",

@@ -1,7 +1,12 @@
 # CLAUDE.md — Dragnet
 
 Family torrent search over a self-hosted bitmagnet DHT index, with sends to put.io.
-Deployed at `/opt/stacks/dragnet/` on 192.168.16.10 (web UI: `:9180`, bitmagnet: `:3333`).
+Deployed at `/opt/stacks/dragnet/` on 192.168.16.10 (web UI: `:9180`, bitmagnet:
+`:3333`), and published to family members at https://dragnet.jensenbox.com via a
+Cloudflare tunnel with Cloudflare Access in front.
+
+Use the LAN addresses below, not the public hostname: Access would answer a
+programmatic request with a login redirect, not JSON.
 
 ## Handling "download X" requests (e.g. "all seasons of Westworld in 4K")
 
@@ -66,8 +71,19 @@ by name/size.
 `content_type` must be the bitmagnet `contentType` verbatim — it drives folder
 routing. Responses: `201` sent (includes `destination`), `409` duplicate (someone
 already sent it — report this, only re-send with `"force": true` if the user asks),
-`502` put.io failure, `400` bad payload. API sends show up in History as user
-`claude`.
+`403` adult content without permission, `502` put.io failure, `400` bad payload.
+API sends show up in History as user `claude`.
+
+### Adult content
+
+`contentType: xxx` is a separate section in the web UI and a separate put.io
+folder (`adult/`, outside the rclone-watched `plex/`). Two consequences for you:
+
+- Searching bitmagnet directly will return `xxx` results, because GraphQL has no
+  permission model. Do not send them unless the user asked for adult content.
+- The dragnet API returns `403` for `xxx` unless the `claude` user has been
+  granted `core.view_adult_content` in `/admin/`. That is deliberate: report the
+  403 rather than working around it.
 
 ### 4. Report
 
@@ -90,3 +106,13 @@ Deploy: push to `main` → CI builds `ghcr.io/jensenbox/dragnet:latest` →
 Secrets live only in `/opt/stacks/dragnet/.env`. SQLite (download history) is the
 only state worth backing up; the bitmagnet Postgres index is a rebuildable cache
 and is excluded from the nightly backup.
+
+Two traps when changing the deployment:
+
+- `CLASSIFIER_DELETE_XXX=true` does not merely hide adult content; bitmagnet
+  blocklists every adult infohash it sees in the `blocked_torrents` bloom filter
+  and never re-crawls it. Turning it back on loses index history permanently.
+- The `cloudflared` service is behind the `tunnel` compose profile, enabled by
+  `COMPOSE_PROFILES=tunnel` in `.env`. This keeps the nightly
+  `update-everything.sh` (`git pull` + plain `docker compose up -d`) working on a
+  host with no tunnel token.

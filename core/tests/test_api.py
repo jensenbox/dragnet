@@ -2,7 +2,7 @@ import json
 
 import pytest
 import responses
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.urls import reverse
 
 from core import putio
@@ -126,3 +126,58 @@ def test_putio_failure_is_502_and_recorded(client):
     assert response.status_code == 502
     download_request = DownloadRequest.objects.get()
     assert download_request.status == DownloadRequest.Status.FAILED
+
+
+@pytest.mark.django_db
+def test_api_refuses_adult_content_without_permission(client, settings):
+    settings.DRAGNET_API_TOKEN = "test-api-token"
+    response = client.post(
+        reverse("api_download"),
+        data=json.dumps(
+            {
+                "info_hash": "c" * 40,
+                "title": "something",
+                "magnet_uri": "magnet:?xt=urn:btih:" + "c" * 40,
+                "content_type": "xxx",
+            }
+        ),
+        content_type="application/json",
+        HTTP_AUTHORIZATION="Bearer test-api-token",
+    )
+    assert response.status_code == 403
+    assert response.json()["status"] == "forbidden"
+    assert not DownloadRequest.objects.exists()
+
+
+@pytest.mark.django_db
+def test_api_sends_adult_content_when_the_api_user_is_permitted(client, settings):
+    settings.DRAGNET_API_TOKEN = "test-api-token"
+    settings.PUTIO_OAUTH_TOKEN = "test-token"
+    api_user = User.objects.create(username=settings.DRAGNET_API_USERNAME)
+    api_user.user_permissions.add(Permission.objects.get(codename="view_adult_content"))
+
+    with responses.RequestsMock() as mock:
+        mock.get(
+            putio.FILES_LIST_URL,
+            json={
+                "status": "OK",
+                "files": [{"id": 901, "file_type": "FOLDER", "name": settings.PUTIO_ADULT_FOLDER}],
+            },
+        )
+        mock.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 88}})
+        response = client.post(
+            reverse("api_download"),
+            data=json.dumps(
+                {
+                    "info_hash": "d" * 40,
+                    "title": "something",
+                    "magnet_uri": "magnet:?xt=urn:btih:" + "d" * 40,
+                    "content_type": "xxx",
+                }
+            ),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer test-api-token",
+        )
+
+    assert response.status_code == 201
+    assert response.json()["destination"] == settings.PUTIO_ADULT_FOLDER

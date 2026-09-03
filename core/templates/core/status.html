@@ -75,8 +75,11 @@
 {% endif %}
 {% endif %}
 
+{% if dashboard_url %}
 <p class="text-secondary">
   Full crawler dashboard (throughput charts, per-queue detail):
   <a href="{{ dashboard_url }}">{{ dashboard_url }}</a>
+  <span class="badge text-bg-secondary">LAN only</span>
 </p>
+{% endif %}
 {% endblock %}

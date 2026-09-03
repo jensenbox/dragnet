@@ -1,12 +1,22 @@
 {% extends "core/base.html" %}
 
-{% block title %}Search — Dragnet{% endblock %}
+{% block title %}{% if adult %}Adult{% else %}Search{% endif %} — Dragnet{% endblock %}
 
 {% block content %}
+{% if adult %}
+<div class="alert alert-danger d-flex justify-content-between align-items-center">
+  <div>
+    <strong>Adult section.</strong> These results are adult content only, and sends go to
+    <code>{{ adult_folder }}/</code> on put.io — outside the folder rclone ships to Plex.
+  </div>
+  <a href="{% url 'search' %}" class="btn btn-sm btn-outline-light text-nowrap ms-3">← Family search</a>
+</div>
+{% endif %}
 <form method="get" class="row g-2 mb-4">
   <div class="col-12 col-lg-4">
     <input type="search" name="q" value="{{ query }}" class="form-control" placeholder="Search torrents… e.g. Westworld" autofocus>
   </div>
+  {% if not adult %}
   <div class="col-6 col-lg-2">
     <select name="content_type" class="form-select">
       <option value="">Any type</option>
@@ -15,6 +25,7 @@
       {% endfor %}
     </select>
   </div>
+  {% endif %}
   <div class="col-6 col-lg-2">
     <select name="resolution" class="form-select">
       <option value="">Any resolution</option>
@@ -77,7 +88,7 @@
         </td>
         <td class="text-nowrap">{{ item.publishedAt|date:"Y-m-d" }}</td>
         <td class="text-end">
-          <form method="post" action="{% url 'download' %}">
+          <form method="post" action="{% if adult %}{% url 'adult_download' %}{% else %}{% url 'download' %}{% endif %}">
             {% csrf_token %}
             <input type="hidden" name="info_hash" value="{{ item.infoHash }}">
             <input type="hidden" name="content_type" value="{{ item.contentType|default:'' }}">
@@ -96,7 +107,12 @@
       </tr>
       {% empty %}
       <tr><td colspan="5" class="text-center text-secondary py-5">
+        {% if adult %}
+        No results. Adult content was discarded at classification time until recently, so this
+        section only indexes what the crawler has seen since — expect it to fill in over days.
+        {% else %}
         No results. The DHT index grows over time — popular content appears within hours of the crawler starting.
+        {% endif %}
       </td></tr>
       {% endfor %}
     </tbody>

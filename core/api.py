@@ -65,6 +65,18 @@ def download(request):
             size=body.get("size"),
             force=bool(body.get("force")),
         )
+    except services.AdultContentNotPermitted:
+        return JsonResponse(
+            {
+                "status": "forbidden",
+                "error": "adult content requires the core.view_adult_content permission",
+                "hint": (
+                    f"grant it to the '{settings.DRAGNET_API_USERNAME}' user in /admin/ "
+                    "if API sends of adult content are wanted"
+                ),
+            },
+            status=403,
+        )
     except services.DuplicateDownload as exc:
         return JsonResponse(
             {

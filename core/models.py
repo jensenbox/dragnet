@@ -26,6 +26,9 @@ class DownloadRequest(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("view_adult_content", "Can browse and send adult content"),
+        ]
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"

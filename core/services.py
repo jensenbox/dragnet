@@ -7,7 +7,12 @@ routing, duplicate detection, and history recording can never diverge.
 from django.conf import settings
 
 from . import putio
+from .bitmagnet import ADULT_CONTENT_TYPE
 from .models import DownloadRequest
+
+
+class AdultContentNotPermitted(Exception):
+    """This user may not send adult content."""
 
 
 class DuplicateDownload(Exception):
@@ -23,9 +28,12 @@ class DuplicateDownload(Exception):
 def destination_folders(content_type: str) -> list[str]:
     """put.io folder path for a bitmagnet content type — the routing rules.
 
-    Classified movies/TV go under the base (rclone-watched) folder; anything
-    else goes to a root-level folder that rclone does NOT ship to the server.
+    Classified movies/TV go under the base (rclone-watched) folder; adult and
+    anything else go to root-level folders that rclone does NOT ship to the
+    server, so neither can reach the family Plex library.
     """
+    if content_type == ADULT_CONTENT_TYPE:
+        return [settings.PUTIO_ADULT_FOLDER]
     subfolder = settings.PUTIO_CONTENT_TYPE_FOLDERS.get(content_type)
     if subfolder:
         return [settings.PUTIO_BASE_FOLDER, subfolder]
@@ -44,9 +52,14 @@ def send_download(
 ) -> DownloadRequest:
     """Send a magnet to put.io and record it.
 
-    Raises DuplicateDownload if already sent (unless force), and PutioError
-    on transfer failure — after recording a FAILED row.
+    Raises DuplicateDownload if already sent (unless force), PutioError on
+    transfer failure (after recording a FAILED row), and AdultContentNotPermitted
+    if the user lacks the adult permission. The permission is enforced here
+    rather than only in the view so the web UI and the JSON API can't diverge.
     """
+    if content_type == ADULT_CONTENT_TYPE and not user.has_perm("core.view_adult_content"):
+        raise AdultContentNotPermitted("you do not have permission to send adult content")
+
     if not force:
         existing = (
             DownloadRequest.objects.filter(info_hash=info_hash, status=DownloadRequest.Status.SENT)

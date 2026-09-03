@@ -11,6 +11,12 @@
         {% if form.errors %}
         <div class="alert alert-danger">Wrong username or password.</div>
         {% endif %}
+        {% if cf_access_active %}
+        <div class="alert alert-warning">
+          You're signed in with Cloudflare Access but have no dragnet account yet,
+          or your account is disabled. Ask Christian to enable it.
+        </div>
+        {% endif %}
         <form method="post">
           {% csrf_token %}
           <div class="mb-3">

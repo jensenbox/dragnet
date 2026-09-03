@@ -9,14 +9,17 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕸️</text></svg>">
 </head>
 <body>
-<nav class="navbar navbar-expand bg-body-tertiary mb-4">
+<nav class="navbar navbar-expand {% if adult %}border-bottom border-danger border-3 {% endif %}bg-body-tertiary mb-4">
   <div class="container">
-    <a class="navbar-brand" href="{% url 'search' %}">🕸️ Dragnet</a>
+    <a class="navbar-brand" href="{% url 'search' %}">🕸️ Dragnet{% if adult %} <span class="badge text-bg-danger align-middle">Adult</span>{% endif %}</a>
     {% if user.is_authenticated %}
     <ul class="navbar-nav me-auto">
       <li class="nav-item"><a class="nav-link" href="{% url 'search' %}">Search</a></li>
       <li class="nav-item"><a class="nav-link" href="{% url 'history' %}">History</a></li>
       <li class="nav-item"><a class="nav-link" href="{% url 'status' %}">Status</a></li>
+      {% if perms.core.view_adult_content %}
+      <li class="nav-item"><a class="nav-link{% if adult %} active fw-semibold{% endif %}" href="{% url 'adult_search' %}">Adult</a></li>
+      {% endif %}
       {% if user.is_staff %}
       <li class="nav-item"><a class="nav-link" href="{% url 'admin:index' %}">Admin</a></li>
       {% endif %}
