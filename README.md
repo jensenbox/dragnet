@@ -48,25 +48,45 @@ by email if there is one, so accounts created in `/admin/` keep their username
 and privileges). Django's own login page still works on the LAN for the
 superuser.
 
-**First-time setup** (Cloudflare dashboard, then the server):
+### What is deployed
 
-1. Zero Trust → Networks → Tunnels → **Create a tunnel** (Cloudflared), name it
-   `dragnet`. Copy the **tunnel token** from the install command.
-2. On that tunnel, add a **public hostname**: `dragnet.jensenbox.com` →
-   type `HTTP` → URL `web:8000`. That is the compose *service name*, not the
-   host IP — cloudflared shares the stack's network. This creates a proxied
-   CNAME that takes precedence over the existing `*.jensenbox.com` wildcard A
-   record.
-3. Zero Trust → Access → Applications → **Add a self-hosted application** for
-   `dragnet.jensenbox.com`. Copy its **Application Audience (AUD) Tag**.
-4. Add a policy: action *Allow*, include → **Emails** → the family addresses.
-5. In `/opt/stacks/dragnet/.env` set `CF_TUNNEL_TOKEN`, `CF_ACCESS_TEAM_DOMAIN`,
-   `CF_ACCESS_AUD`, `COMPOSE_PROFILES=tunnel`, `CSRF_TRUSTED_ORIGINS`,
-   `SECURE_COOKIES=true`, and add the hostname to `ALLOWED_HOSTS`.
-6. `docker compose up -d`.
+These resources exist in the **Closient Search Inc.** Cloudflare account
+(`54c3a2f6ad897a60b339b57c0863e2b6`) — the same account that holds
+closient.com, since `jensenbox.com` is a zone in it. They were created via the
+API, not the dashboard, and are **not** Terraform-managed (like the silverbullet
+tunnel next to them, and unlike everything under `closient.com`).
+
+| Resource | Value |
+|---|---|
+| Zone (`jensenbox.com`) | `703ffb36d85c7149e97d465689e53272` |
+| Tunnel `dragnet` | `8a7c7958-a8c9-4119-96ca-f5f60bc0fd5c` |
+| Access app | `b16b1930-ef50-472b-9c9e-cf8aeb035bde` |
+| Access AUD tag | `6b3365d64073252211f43872c5899464f0f7afe14ba831f7db422468a1a456ec` |
+| Access team domain | `closient.cloudflareaccess.com` |
+| DNS | `dragnet` CNAME → `<tunnel id>.cfargotunnel.com`, proxied |
+| Ingress | `dragnet.jensenbox.com` → `http://web:8000` (compose service name) |
+| Allowed IdPs | Google, one-time PIN |
+
+The proxied CNAME takes precedence over the `*.jensenbox.com` wildcard A record
+that points at the home WAN address.
+
+### Rebuilding it
+
+If any of the above is lost, recreate with an API token holding
+*Cloudflare Tunnel: Edit*, *Access: Apps and Policies: Edit*, and
+*DNS: Edit* on the jensenbox.com zone. Note the zone-scope trap: the account's
+existing tokens are scoped to a **specific list of zones** that does not include
+jensenbox.com, so a DNS write returns `10000 Authentication error` rather than a
+permission error. Mint a separate short-lived token scoped to this zone instead
+of widening a production credential.
+
+Order matters — create the Access application *before* the DNS record, so the
+hostname is never publicly resolvable without Access in front of it.
 
 Verify with `dig +short dragnet.jensenbox.com` — it should return Cloudflare
-edge IPs (`104.x` / `172.67.x`) rather than the home WAN address.
+edge IPs (`104.x` / `172.67.x`) rather than the home WAN address, and
+`curl -sI https://dragnet.jensenbox.com/` should 302 to
+`closient.cloudflareaccess.com/cdn-cgi/access/login/...`.
 
 The `cloudflared` service sits behind a compose profile, so the stack still
 comes up normally on a host with no tunnel token.
