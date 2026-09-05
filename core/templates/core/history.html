@@ -56,7 +56,7 @@
           {% if dr.content_type %}<span class="badge text-bg-secondary">{{ dr.content_type }}</span>{% else %}—{% endif %}
         </td>
         <td class="cell-meta text-nowrap" data-label="Size">{% if dr.size %}{{ dr.size|filesizeformat }}{% else %}—{% endif %}</td>
-        <td class="cell-meta" data-label="By">{{ dr.user.username }}</td>
+        <td class="cell-meta" data-label="By" title="{{ dr.user.username }}">{{ dr.sender_label }}</td>
         <td class="cell-meta text-nowrap" data-label="When">{{ dr.created_at|date:"Y-m-d H:i" }}</td>
         <td class="cell-meta" data-label="Status">
           {% if dr.status == "sent" %}

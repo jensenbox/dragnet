@@ -82,3 +82,16 @@
     border: 0;
   }
 }
+
+/* Desktop: a table is only as narrow as its widest cell allows. Release names
+   run to 80+ characters, and left unconstrained they grow the table well past
+   the viewport, put it behind .table-responsive's horizontal scroll, and push
+   the last column — the action button — off the right edge. That is the same
+   defect this file fixes for phones, arriving on desktop instead once History
+   grew to seven columns. Cap the title and let it wrap. */
+@media (min-width: 992px) {
+  .stacked-table .cell-title {
+    max-width: 28rem;
+    overflow-wrap: anywhere;
+  }
+}

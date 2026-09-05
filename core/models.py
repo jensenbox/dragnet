@@ -44,5 +44,14 @@ class DownloadRequest(models.Model):
             ("view_adult_content", "Can browse and send adult content"),
         ]
 
+    @property
+    def sender_label(self) -> str:
+        """Short name for the log. Cloudflare Access provisions family accounts
+        with the email address as the username, and a column full of
+        kanequinton@gmail.com is wide enough to push the action column off the
+        right of the page. The full address stays in the cell's title attribute
+        and is still what the sender filter matches on."""
+        return (self.user.email or self.user.username).split("@")[0]
+
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
