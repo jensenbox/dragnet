@@ -24,6 +24,14 @@ from core.models import DownloadRequest
 # resolve and there is no point asking about them every hour, forever.
 MAX_AGE = timedelta(days=30)
 
+
+def _brief(exc: Exception) -> str:
+    """put.io returns a 500-character body on a 404; an hourly cron printing
+    that for every purged transfer buries the lines that matter."""
+    text = str(exc)
+    return "gone from put.io (404)" if "404" in text else text[:120]
+
+
 SUBJECT = "Your download is ready: {title}"
 
 TEXT = """{title} has finished downloading.
@@ -51,9 +59,19 @@ class Command(BaseCommand):
             action="store_true",
             help="Resolve and report, but write nothing and send nothing.",
         )
+        parser.add_argument(
+            "--resolve-only",
+            action="store_true",
+            help=(
+                "Record the downloadable file for finished transfers but send no "
+                "email. Use it before enabling the cron so a backlog of already-"
+                "finished downloads doesn't mail everyone at once."
+            ),
+        )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
+        resolve_only = options["resolve_only"]
         cutoff = timezone.now() - MAX_AGE
         pending = (
             DownloadRequest.objects.filter(
@@ -71,7 +89,7 @@ class Command(BaseCommand):
                 transfer = putio.get_transfer(row.putio_transfer_id)
             except putio.PutioError as exc:
                 # A purged transfer 404s here. Nothing to do but move on.
-                self.stderr.write(f"  transfer {row.putio_transfer_id}: {exc}")
+                self.stderr.write(f"  transfer {row.putio_transfer_id}: {_brief(exc)}")
                 skipped += 1
                 continue
 
@@ -85,7 +103,7 @@ class Command(BaseCommand):
                 chosen = putio.pick_downloadable_file(file_id)
             except putio.PutioError as exc:
                 # A deleted file 404s here.
-                self.stderr.write(f"  file {file_id}: {exc}")
+                self.stderr.write(f"  file {file_id}: {_brief(exc)}")
                 skipped += 1
                 continue
             if not chosen:
@@ -98,13 +116,14 @@ class Command(BaseCommand):
                 row.putio_file_id = chosen["id"]
                 row.save(update_fields=["putio_file_id"])
 
-            if self._notify(row, dry_run=dry_run):
+            if not resolve_only and self._notify(row, dry_run=dry_run):
                 notified += 1
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"resolved={resolved} notified={notified} skipped={skipped}"
                 + (" (dry run, nothing written)" if dry_run else "")
+                + (" (resolve-only, no email sent)" if resolve_only else "")
             )
         )
 

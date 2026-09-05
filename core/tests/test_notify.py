@@ -299,3 +299,17 @@ def test_download_hides_legacy_adult_rows_from_the_family(client, requester, set
     client.force_login(requester)
     # Now visible: it gets past the 404 and fails on put.io instead.
     assert client.get(reverse("file_download", args=[adult_row.pk])).status_code != 404
+
+
+@responses.activate
+def test_resolve_only_records_the_file_but_sends_nothing(row, settings):
+    """Used once before enabling the cron, so a backlog of already-finished
+    downloads doesn't mail everyone about books they got hours ago."""
+    settings.PUTIO_OAUTH_TOKEN = "t"
+    _configure_email(settings)
+    _mock_finished_transfer()
+    call_command("notify_ready", "--resolve-only")
+    row.refresh_from_db()
+    assert row.putio_file_id == FILE_ID
+    assert row.notified_at is None
+    assert not [c for c in responses.calls if c.request.url == mail.SEND_URL]
