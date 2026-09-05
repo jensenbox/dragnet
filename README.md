@@ -24,7 +24,11 @@ dragnet web ──► api.put.io /v2/transfers/add
   Its own UI/API has no auth, so it is **not** published on the host — only the Django app is.
 - The Django app (`core/`) provides the search UI (filter by type / resolution /
   year, sort by seeders / size / date) and sends magnets to put.io, recording who
-  sent what.
+  sent what. Movies and TV go to the rclone-watched `plex/` folder; everything
+  else — ebooks, audiobooks, comics, music, software, games, and anything
+  bitmagnet could not classify — goes to `unclassified/<person>/`, split by
+  sender so it is obvious whose book is whose without reading titles. History
+  records the content type and filters by type and by sender.
 - Public access goes through a Cloudflare tunnel, with Cloudflare Access in front
   doing the authentication. See [Public access](#public-access-via-cloudflare).
 - Adult content lives in a separate, permission-gated section. See

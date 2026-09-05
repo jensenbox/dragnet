@@ -3,7 +3,7 @@ import responses
 from django.contrib.auth.models import User
 from django.urls import reverse
 
-from core import putio
+from core import putio, services
 from core.models import DownloadRequest
 from core.tests.test_bitmagnet import GRAPHQL_URL, make_item, search_payload
 
@@ -113,9 +113,14 @@ def test_download_movie_goes_to_curated_movies(client, user, settings):
 
 
 @responses.activate
-def test_download_unclassified_goes_to_root_unclassified_folder(client, user, settings):
+def test_download_unclassified_goes_to_a_per_person_folder(client, user, settings):
+    """Unclassified content is split per sender, so it is obvious whose it is.
+
+    Neither the root folder nor the person's subfolder exists yet, so both are
+    created — which is what makes a new family member's first send work with no
+    setup on put.io.
+    """
     settings.PUTIO_OAUTH_TOKEN = "test-token"
-    # Root listing has no "unclassified" folder yet, so it gets created.
     responses.get(
         putio.FILES_LIST_URL,
         json={"status": "OK", "files": [{"id": 100, "file_type": "FOLDER", "name": "plex"}]},
@@ -123,8 +128,26 @@ def test_download_unclassified_goes_to_root_unclassified_folder(client, user, se
     responses.post(putio.CREATE_FOLDER_URL, json={"status": "OK", "file": {"id": 500}})
     responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 7}})
     client.post(reverse("download"), download_post_data(content_type=""))
-    assert DownloadRequest.objects.get().destination == "unclassified"
+    assert DownloadRequest.objects.get().destination == f"unclassified/{user.username}"
     assert "save_parent_id=500" in responses.calls[-1].request.body
+
+
+def test_person_folder_uses_the_email_local_part():
+    """Access provisions family accounts with the email as the username, so the
+    folder must not end up called kanequinton@gmail.com."""
+    kane = User(username="kanequinton@gmail.com", email="kanequinton@gmail.com")
+    assert services.person_folder(kane) == "kanequinton"
+
+
+def test_person_folder_falls_back_to_username_without_an_email():
+    """The API's `claude` user has no email address."""
+    assert services.person_folder(User(username="claude", email="")) == "claude"
+
+
+def test_person_folder_cannot_introduce_a_path_separator():
+    """A folder segment is built from user-controlled data; keep it boring."""
+    nasty = User(username="a/../b", email="a/../b@example.com")
+    assert "/" not in services.person_folder(nasty)
 
 
 def test_download_rejects_non_magnet(client, user):

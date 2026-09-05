@@ -4,6 +4,7 @@ Both the web UI and the JSON API go through send_download() so that folder
 routing, duplicate detection, and history recording can never diverge.
 """
 
+import re
 from dataclasses import dataclass
 
 from django.conf import settings
@@ -42,29 +43,59 @@ class DuplicateDownload(Exception):
         )
 
 
-def destination_folders(content_type: str) -> list[str]:
+def person_folder(user) -> str:
+    """The folder segment naming whoever asked for a download.
+
+    Cloudflare Access provisions family accounts with the email address as the
+    username, so the local part is both readable and stable — kanequinton, not
+    kanequinton@gmail.com. Falls back to the username for accounts with no email
+    (the API's `claude` user), and to the pk if neither yields anything a folder
+    name can safely be made of.
+    """
+    source = (getattr(user, "email", "") or getattr(user, "username", "") or "").strip()
+    local = source.split("@")[0]
+    # put.io folder names are free-form; keep them boring so they stay easy to
+    # type on the server and can't introduce a path separator.
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", local).strip("-.")
+    return slug or f"user-{user.pk}"
+
+
+def destination_folders(content_type: str, user) -> list[str]:
     """put.io folder path for a bitmagnet content type — the routing rules.
 
-    Classified movies/TV go under the base (rclone-watched) folder; adult and
-    anything else go to root-level folders that rclone does NOT ship to the
-    server, so neither can reach the family Plex library.
+    Classified movies/TV go under the base (rclone-watched) folder. Everything
+    else goes to root-level folders that rclone does NOT ship to the server, so
+    neither can reach the family Plex library.
+
+    Unclassified content — ebooks, audiobooks, comics, music, software, games,
+    and anything bitmagnet could not type — is additionally split per person, so
+    it is obvious whose book is whose without reading titles.
+
+    `user` is required rather than optional on purpose: a caller that forgot it
+    would silently fall back to the old shared folder, which is exactly the bug
+    this routing exists to prevent. Adult is the one path that ignores it — see
+    below.
     """
     if content_type == ADULT_CONTENT_TYPE:
+        # Deliberately NOT per person. Adult sends leave no database row (see
+        # send_download); giving them a per-person folder would rebuild that
+        # same record on put.io, where the whole family can see it.
         return [settings.PUTIO_ADULT_FOLDER]
     subfolder = settings.PUTIO_CONTENT_TYPE_FOLDERS.get(content_type)
     if subfolder:
         return [settings.PUTIO_BASE_FOLDER, subfolder]
-    return [settings.PUTIO_UNCLASSIFIED_FOLDER]
+    return [settings.PUTIO_UNCLASSIFIED_FOLDER, person_folder(user)]
 
 
 def adult_destination() -> str:
     """The stored `destination` of an adult send.
 
-    History has no content type to filter on, so it identifies adult rows by
-    where they were routed. Deriving it from destination_folders() keeps the two
-    from drifting apart if the routing rules change.
+    History identifies adult rows by where they were routed. Deriving it from
+    destination_folders() keeps the two from drifting apart if the routing rules
+    change. Passing user=None is safe because the adult path returns before the
+    per-person segment is reached.
     """
-    return "/".join(destination_folders(ADULT_CONTENT_TYPE))
+    return "/".join(destination_folders(ADULT_CONTENT_TYPE, None))
 
 
 def send_download(
@@ -109,7 +140,7 @@ def send_download(
         if existing:
             raise DuplicateDownload(existing)
 
-    folder_names = destination_folders(content_type)
+    folder_names = destination_folders(content_type, user)
     destination = "/".join(folder_names)
 
     try:
@@ -124,6 +155,7 @@ def send_download(
                 size=size,
                 magnet_uri=magnet_uri,
                 destination=destination,
+                content_type=content_type,
                 status=DownloadRequest.Status.FAILED,
                 error=str(exc),
             )
@@ -137,6 +169,7 @@ def send_download(
             size=size,
             magnet_uri=magnet_uri,
             destination=destination,
+            content_type=content_type,
             putio_transfer_id=transfer.get("id"),
             status=DownloadRequest.Status.SENT,
         )

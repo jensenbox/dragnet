@@ -13,8 +13,10 @@ programmatic request with a login redirect, not JSON.
 You have a full programmatic path. The division of labor: **bitmagnet GraphQL for
 search, your judgment for picking, the dragnet API for sending.** Never call put.io
 directly — the dragnet API is the single code path that owns folder routing
-(movie → `plex/curated_movies`, tv_show → `plex/tv_series`, unclassified →
-root `unclassified/`), duplicate detection, and family-visible history.
+(movie → `plex/curated_movies`, tv_show → `plex/tv_series`, everything else →
+`unclassified/<person>/`, where `<person>` is the sender's email local part —
+so your own sends land in `unclassified/claude/`), duplicate detection, and
+family-visible history.
 
 ### 1. Search the index — bitmagnet GraphQL
 

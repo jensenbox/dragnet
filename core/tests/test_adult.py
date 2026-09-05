@@ -38,17 +38,30 @@ def adult_user(client):
 # --- routing ---------------------------------------------------------------
 
 
-def test_adult_sends_route_outside_the_plex_folder(settings):
+def test_adult_sends_route_outside_the_plex_folder(settings, adult_user):
     """rclone watches PUTIO_BASE_FOLDER; adult must not be under it."""
-    folders = services.destination_folders("xxx")
+    folders = services.destination_folders("xxx", adult_user)
     assert folders == [settings.PUTIO_ADULT_FOLDER]
     assert settings.PUTIO_BASE_FOLDER not in folders
 
 
-def test_normal_routing_is_unchanged(settings):
-    assert services.destination_folders("movie") == [settings.PUTIO_BASE_FOLDER, "curated_movies"]
-    assert services.destination_folders("tv_show") == [settings.PUTIO_BASE_FOLDER, "tv_series"]
-    assert services.destination_folders("music") == [settings.PUTIO_UNCLASSIFIED_FOLDER]
+def test_adult_sends_are_never_split_per_person(settings, adult_user):
+    """A per-person adult folder would rebuild on put.io the very record that
+    not logging adult sends is meant to avoid."""
+    folders = services.destination_folders("xxx", adult_user)
+    assert folders == [settings.PUTIO_ADULT_FOLDER]
+    assert services.person_folder(adult_user) not in folders
+
+
+def test_normal_routing_is_unchanged(settings, plain_user):
+    assert services.destination_folders("movie", plain_user) == [
+        settings.PUTIO_BASE_FOLDER,
+        "curated_movies",
+    ]
+    assert services.destination_folders("tv_show", plain_user) == [
+        settings.PUTIO_BASE_FOLDER,
+        "tv_series",
+    ]
 
 
 # --- permission gate -------------------------------------------------------
@@ -206,14 +219,18 @@ def test_family_sends_are_still_recorded(adult_user, settings):
                     "id": 901,
                     "file_type": "FOLDER",
                     "name": settings.PUTIO_UNCLASSIFIED_FOLDER,
-                }
+                },
+                {
+                    "id": 902,
+                    "file_type": "FOLDER",
+                    "name": services.person_folder(adult_user),
+                    "parent_id": 901,
+                },
             ],
         },
     )
     responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 78}})
 
-    # music routes to the single root-level unclassified folder; the multi-level
-    # plex/* paths are covered by test_normal_routing_is_unchanged.
     services.send_download(
         adult_user,
         info_hash="c" * 40,
@@ -290,6 +307,69 @@ def test_history_shows_adult_sends_to_permitted_users(client, adult_user, settin
     assert "Westworld S01" in body
 
 
-def test_adult_destination_tracks_the_routing_rules(settings):
+def test_adult_destination_tracks_the_routing_rules(settings, adult_user):
     """The history filter must keep matching wherever adult sends actually go."""
-    assert services.adult_destination() == "/".join(services.destination_folders("xxx"))
+    assert services.adult_destination() == "/".join(services.destination_folders("xxx", adult_user))
+
+
+# --- history filters --------------------------------------------------------
+
+
+def test_history_filters_by_content_type(client, plain_user, settings):
+    DownloadRequest.objects.create(
+        user=plain_user,
+        info_hash="1" * 40,
+        title="A Book",
+        magnet_uri=MAGNET,
+        destination="unclassified/bob",
+        content_type="ebook",
+    )
+    DownloadRequest.objects.create(
+        user=plain_user,
+        info_hash="2" * 40,
+        title="A Film",
+        magnet_uri=MAGNET,
+        destination="plex/curated_movies",
+        content_type="movie",
+    )
+
+    body = client.get(reverse("history"), {"content_type": "ebook"}).content.decode()
+    assert "A Book" in body
+    assert "A Film" not in body
+
+
+def test_history_filters_by_sender(client, plain_user, settings):
+    other = User.objects.create_user("dave")
+    DownloadRequest.objects.create(
+        user=plain_user,
+        info_hash="3" * 40,
+        title="Bob Book",
+        magnet_uri=MAGNET,
+        destination="unclassified/bob",
+        content_type="ebook",
+    )
+    DownloadRequest.objects.create(
+        user=other,
+        info_hash="4" * 40,
+        title="Dave Book",
+        magnet_uri=MAGNET,
+        destination="unclassified/dave",
+        content_type="ebook",
+    )
+
+    body = client.get(reverse("history"), {"sender": "dave"}).content.decode()
+    assert "Dave Book" in body
+    assert "Bob Book" not in body
+
+
+def test_history_sender_dropdown_does_not_leak_adult_only_senders(client, plain_user, settings):
+    """The dropdown is built from rows the viewer may see, not from every row —
+    otherwise a sender who only ever sent adult content would be named on a page
+    that is meant to hide exactly that."""
+    secret = User.objects.create_user("mallory")
+    _make_adult_row(secret, settings)
+    _make_family_row(plain_user, settings)
+
+    body = client.get(reverse("history")).content.decode()
+    assert "mallory" not in body
+    assert plain_user.username in body

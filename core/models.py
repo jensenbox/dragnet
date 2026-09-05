@@ -19,6 +19,12 @@ class DownloadRequest(models.Model):
     size = models.BigIntegerField(null=True, blank=True)
     magnet_uri = models.TextField()
     destination = models.CharField(max_length=255, blank=True, default="")
+    # The bitmagnet contentType this was sent as. Stored because `destination`
+    # alone can't answer "who downloaded which book" — every unclassified type
+    # shares one folder root, so ebooks, music and games look identical in the
+    # log. Blank for rows written before this field existed, and for torrents
+    # bitmagnet could not classify.
+    content_type = models.CharField(max_length=32, blank=True, default="")
     putio_transfer_id = models.BigIntegerField(null=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.SENT)
     error = models.TextField(blank=True, default="")

@@ -180,8 +180,35 @@ def history(request):
     routed to the adult folder should ever reach this page. The exclusion below
     stays as defence in depth: it covers rows written before adult sends stopped
     being logged, and any future regression that starts writing them again.
+
+    Filterable by content type and by sender, which together answer the question
+    the log exists for: who asked for which book.
     """
-    requests_list = DownloadRequest.objects.select_related("user")
+    visible = DownloadRequest.objects.select_related("user")
     if not request.user.has_perm(ADULT_PERMISSION):
-        requests_list = requests_list.exclude(destination=services.adult_destination())
-    return render(request, "core/history.html", {"download_requests": requests_list[:500]})
+        visible = visible.exclude(destination=services.adult_destination())
+
+    # Built from everything this viewer may see, deliberately before the filters
+    # below — otherwise choosing a sender would collapse the dropdown to that
+    # one person and there'd be no way back.
+    senders = sorted(set(visible.values_list("user__username", flat=True)))
+
+    content_type = request.GET.get("content_type", "")
+    sender = request.GET.get("sender", "")
+    rows = visible
+    if content_type:
+        rows = rows.filter(content_type=content_type)
+    if sender:
+        rows = rows.filter(user__username=sender)
+
+    return render(
+        request,
+        "core/history.html",
+        {
+            "download_requests": rows[:500],
+            "content_types": bitmagnet.CONTENT_TYPES,
+            "content_type": content_type,
+            "senders": senders,
+            "sender": sender,
+        },
+    )

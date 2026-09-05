@@ -4,11 +4,40 @@
 
 {% block content %}
 <h1 class="h3 mb-4">Download history</h1>
+
+<form method="get" class="row g-2 mb-4">
+  <div class="col-6 col-lg-3">
+    <select name="content_type" class="form-select">
+      <option value="">Any type</option>
+      {% for value, label in content_types %}
+      <option value="{{ value }}" {% if value == content_type %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-6 col-lg-3">
+    <select name="sender" class="form-select">
+      <option value="">Anyone</option>
+      {% for name in senders %}
+      <option value="{{ name }}" {% if name == sender %}selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-lg-2 d-grid">
+    <button type="submit" class="btn btn-primary">Filter</button>
+  </div>
+  {% if content_type or sender %}
+  <div class="col-12 col-lg-2 d-grid">
+    <a href="{% url 'history' %}" class="btn btn-outline-secondary">Clear</a>
+  </div>
+  {% endif %}
+</form>
+
 <div class="table-responsive">
   <table class="table table-hover align-middle stacked-table">
     <thead>
       <tr>
         <th>Title</th>
+        <th>Type</th>
         <th class="text-nowrap">Size</th>
         <th>Destination</th>
         <th>Sent by</th>
@@ -20,6 +49,9 @@
       {% for dr in download_requests %}
       <tr>
         <td class="cell-title fw-semibold">{{ dr.title }}</td>
+        <td class="cell-meta" data-label="Type">
+          {% if dr.content_type %}<span class="badge text-bg-secondary">{{ dr.content_type }}</span>{% else %}—{% endif %}
+        </td>
         <td class="cell-meta text-nowrap" data-label="Size">{% if dr.size %}{{ dr.size|filesizeformat }}{% else %}—{% endif %}</td>
         <td class="cell-meta" data-label="To">{% if dr.destination %}<code>{{ dr.destination }}/</code>{% else %}—{% endif %}</td>
         <td class="cell-meta" data-label="By">{{ dr.user.username }}</td>
@@ -33,7 +65,13 @@
         </td>
       </tr>
       {% empty %}
-      <tr class="is-empty"><td colspan="6" class="text-center text-secondary py-5">Nothing sent to put.io yet.</td></tr>
+      <tr class="is-empty"><td colspan="7" class="text-center text-secondary py-5">
+        {% if content_type or sender %}
+        Nothing matches that filter.
+        {% else %}
+        Nothing sent to put.io yet.
+        {% endif %}
+      </td></tr>
       {% endfor %}
     </tbody>
   </table>
