@@ -20,6 +20,14 @@ services:
       CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
       CF_ACCESS_AUD: ${CF_ACCESS_AUD:-}
       DRAGNET_API_TOKEN: ${DRAGNET_API_TOKEN:-}
+      # Telnyx email for the "your download is ready" notification. Every var
+      # the app reads has to be listed here as well as in settings.py — compose
+      # enumerates them rather than passing .env through, so a new setting that
+      # is only added to settings.py silently stays at its default.
+      TELNYX_API_KEY: ${TELNYX_API_KEY:-}
+      TELNYX_EMAIL_FROM: ${TELNYX_EMAIL_FROM:-}
+      TELNYX_EMAIL_FROM_NAME: ${TELNYX_EMAIL_FROM_NAME:-Dragnet}
+      DRAGNET_PUBLIC_URL: ${DRAGNET_PUBLIC_URL:-https://dragnet.jensenbox.com}
       SQLITE_PATH: /data/db.sqlite3
       DJANGO_SUPERUSER_USERNAME: ${DJANGO_SUPERUSER_USERNAME:-}
       DJANGO_SUPERUSER_PASSWORD: ${DJANGO_SUPERUSER_PASSWORD:-}

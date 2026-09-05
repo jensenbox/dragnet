@@ -120,6 +120,12 @@ Deploy: push to `main` → CI builds `ghcr.io/jensenbox/dragnet:latest` →
 `ssh 192.168.16.10 'cd /opt/stacks/dragnet && git pull --ff-only && docker compose pull && docker compose up -d'`
 (the `git pull` matters: the compose file itself is versioned, so without it the
 new image runs under the old compose and never sees new environment variables)
+
+⚠️ **A new setting needs THREE edits, not one**: `dragnet/settings.py`, the
+`environment:` block in `docker-compose.yml` (compose enumerates vars rather
+than passing `.env` through, so anything unlisted silently keeps its default),
+and `/opt/stacks/dragnet/.env` on the box. Missing the compose one fails
+silently — the app runs, the setting is just empty.
 (wait for CI to finish first).
 
 Secrets live only in `/opt/stacks/dragnet/.env`. SQLite (download history) is the
