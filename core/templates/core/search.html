@@ -57,7 +57,7 @@
 </p>
 
 <div class="table-responsive">
-  <table class="table table-hover align-middle">
+  <table class="table table-hover align-middle stacked-table">
     <thead>
       <tr>
         <th>Title</th>
@@ -70,7 +70,7 @@
     <tbody>
       {% for item in result.items %}
       <tr>
-        <td>
+        <td class="cell-title">
           <div class="fw-semibold">{{ item.torrent.name }}</div>
           <div class="small text-secondary">
             {% if item.contentType %}<span class="badge text-bg-secondary">{{ item.contentType }}</span>{% endif %}
@@ -81,13 +81,13 @@
             {% if item.torrent.filesCount %}<span>· {{ item.torrent.filesCount }} file{{ item.torrent.filesCount|pluralize }}</span>{% endif %}
           </div>
         </td>
-        <td class="text-nowrap">{{ item.torrent.size|filesizeformat }}</td>
-        <td class="text-nowrap">
+        <td class="cell-meta text-nowrap" data-label="Size">{{ item.torrent.size|filesizeformat }}</td>
+        <td class="cell-meta text-nowrap" data-label="S/L">
           <span class="text-success">{{ item.seeders|default:"?" }}</span> /
           <span class="text-danger">{{ item.leechers|default:"?" }}</span>
         </td>
-        <td class="text-nowrap">{{ item.publishedAt|date:"Y-m-d" }}</td>
-        <td class="text-end">
+        <td class="cell-meta text-nowrap" data-label="Published">{{ item.publishedAt|date:"Y-m-d" }}</td>
+        <td class="cell-action text-lg-end">
           <form method="post" action="{% if adult %}{% url 'adult_download' %}{% else %}{% url 'download' %}{% endif %}">
             {% csrf_token %}
             <input type="hidden" name="info_hash" value="{{ item.infoHash }}">
@@ -106,7 +106,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="5" class="text-center text-secondary py-5">
+      <tr class="is-empty"><td colspan="5" class="text-center text-secondary py-5">
         {% if adult %}
         No results. Adult content was discarded at classification time until recently, so this
         section only indexes what the crawler has seen since — expect it to fill in over days.

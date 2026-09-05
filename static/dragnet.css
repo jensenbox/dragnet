@@ -1,0 +1,84 @@
+/* Dragnet layout tweaks on top of Bootstrap.
+ *
+ * The results and history tables are five and six columns wide. Bootstrap's
+ * .table-responsive keeps a table at its natural width and scrolls it
+ * sideways, which on a phone puts the last column — the "Send to put.io"
+ * button — several hundred pixels off the right edge. Measured at a 390px
+ * viewport before this file existed: 839px of table in a 362px window, with
+ * the button starting at x=734.
+ *
+ * Below the lg breakpoint each row becomes a stacked card instead, so the
+ * button is always on screen and nothing scrolls horizontally. The breakpoint
+ * matches the search form's own col-lg-* switch, so the whole page changes
+ * shape at one width. At lg and up the table is untouched.
+ */
+
+@media (max-width: 991.98px) {
+  .stacked-table thead {
+    display: none;
+  }
+
+  .stacked-table,
+  .stacked-table tbody,
+  .stacked-table tr,
+  .stacked-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .stacked-table tr {
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Bootstrap draws a bottom border and padding on every cell. Stacked, that
+     becomes a rule between each field of the same card. */
+  .stacked-table td {
+    border-bottom: 0;
+    padding: 0;
+  }
+
+  .stacked-table .cell-title {
+    /* Release names are long and effectively unbroken (dots, not spaces), so
+       without this a single title still forces the card wider than the
+       viewport and the horizontal scrollbar comes straight back. */
+    overflow-wrap: anywhere;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Size, seeders and date flow on one line rather than stacking into three
+     nearly-empty rows. */
+  .stacked-table .cell-meta {
+    display: inline-block;
+    width: auto;
+    margin-right: 1rem;
+    font-size: 0.875rem;
+  }
+
+  /* The header row is hidden, so each value names itself. */
+  .stacked-table .cell-meta::before {
+    content: attr(data-label) " ";
+    color: var(--bs-secondary-color);
+  }
+
+  .stacked-table .cell-action {
+    margin-top: 0.75rem;
+  }
+
+  /* Full-width tap target. Scoped to the primary button so the "already sent"
+     state keeps its badge and small re-send button side by side. The
+     min-height overrides btn-sm's 31px, which is under the ~44px a finger
+     reliably hits. */
+  .stacked-table .cell-action .btn-primary {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* The "no results" row is a message, not a record — don't draw a card
+     around it. */
+  .stacked-table tr.is-empty {
+    border: 0;
+  }
+}
