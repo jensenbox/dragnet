@@ -56,7 +56,7 @@ def download(request):
         )
 
     try:
-        download_request = services.send_download(
+        result = services.send_download(
             _api_user(),
             info_hash=info_hash,
             title=title,
@@ -95,9 +95,9 @@ def download(request):
     return JsonResponse(
         {
             "status": "sent",
-            "title": download_request.title,
-            "destination": download_request.destination,
-            "putio_transfer_id": download_request.putio_transfer_id,
+            "title": result.title,
+            "destination": result.destination,
+            "putio_transfer_id": result.putio_transfer_id,
         },
         status=201,
     )

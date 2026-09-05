@@ -113,7 +113,7 @@ def _send(request, *, adult: bool):
         return redirect(next_url)
 
     try:
-        download_request = services.send_download(
+        result = services.send_download(
             request.user,
             info_hash=info_hash,
             title=title,
@@ -135,7 +135,7 @@ def _send(request, *, adult: bool):
         messages.error(request, f"put.io rejected the transfer: {exc}")
         return redirect(next_url)
 
-    messages.success(request, f"Sent “{title}” to put.io → {download_request.destination}/")
+    messages.success(request, f"Sent “{title}” to put.io → {result.destination}/")
     return redirect(next_url)
 
 
@@ -176,9 +176,10 @@ def status(request):
 def history(request):
     """The shared download log.
 
-    Adult sends are hidden from anyone without the adult permission — otherwise
-    the titles would show up on a page the whole family reads, which is exactly
-    what keeping adult content in a separate section is meant to prevent.
+    Adult sends are not recorded at all (see services.send_download), so nothing
+    routed to the adult folder should ever reach this page. The exclusion below
+    stays as defence in depth: it covers rows written before adult sends stopped
+    being logged, and any future regression that starts writing them again.
     """
     requests_list = DownloadRequest.objects.select_related("user")
     if not request.user.has_perm(ADULT_PERMISSION):

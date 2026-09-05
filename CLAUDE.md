@@ -70,9 +70,10 @@ by name/size.
 
 `content_type` must be the bitmagnet `contentType` verbatim — it drives folder
 routing. Responses: `201` sent (includes `destination`), `409` duplicate (someone
-already sent it — report this, only re-send with `"force": true` if the user asks),
-`403` adult content without permission, `502` put.io failure, `400` bad payload.
-API sends show up in History as user `claude`.
+already sent it — report this, only re-send with `"force": true` if the user asks;
+**family content only** — adult sends are never duplicates), `403` adult content
+without permission, `502` put.io failure, `400` bad payload. API sends show up in
+History as user `claude` — except adult ones, which are not recorded at all.
 
 ### Adult content
 
@@ -84,6 +85,11 @@ folder (`adult/`, outside the rclone-watched `plex/`). Two consequences for you:
 - The dragnet API returns `403` for `xxx` unless the `claude` user has been
   granted `core.view_adult_content` in `/admin/`. That is deliberate: report the
   403 rather than working around it.
+- **Adult sends are never recorded.** No row on success, no row on failure, not
+  even the title. So there is no duplicate detection for `xxx` (the same torrent
+  will send twice, making two put.io transfers, and you will never get a `409`),
+  and nothing to check against beforehand — ask the user rather than assuming a
+  re-send is safe.
 
 ### 4. Report
 

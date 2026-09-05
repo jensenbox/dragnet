@@ -110,6 +110,13 @@ search:
   and never re-crawls it, so the history lost while it was on is not
   recoverable. Do not try to recover it by clearing that filter: the same filter
   holds torrents deleted by the classifier's banned-keywords rule.
+- **Never recorded.** Unlike family sends, an adult send leaves no
+  `DownloadRequest` behind — nothing on success, nothing on failure, not even
+  the title. That is the point, and it costs the two things a record buys:
+  duplicate detection (the same torrent will send twice, making two put.io
+  transfers) and the "already sent" badge. History's adult filter is kept as
+  defence in depth, for rows written before this and against a future
+  regression.
 - **Gated by a permission**, `core.view_adult_content`. Grant it per user or via
   a group in `/admin/`. Without it the nav link is absent and both `/adult/`
   URLs return 403.

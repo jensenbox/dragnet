@@ -4,11 +4,28 @@ Both the web UI and the JSON API go through send_download() so that folder
 routing, duplicate detection, and history recording can never diverge.
 """
 
+from dataclasses import dataclass
+
 from django.conf import settings
 
 from . import putio
 from .bitmagnet import ADULT_CONTENT_TYPE
 from .models import DownloadRequest
+
+
+@dataclass(frozen=True)
+class SendResult:
+    """What a caller needs to report a send, independent of whether it was logged.
+
+    Adult sends deliberately leave no DownloadRequest behind, so there is no row
+    to hand back. Returning this for *every* send keeps both paths identical for
+    callers, and means no caller ever holds a model instance it could persist by
+    accident — which is the whole point for the adult path.
+    """
+
+    title: str
+    destination: str
+    putio_transfer_id: int | None
 
 
 class AdultContentNotPermitted(Exception):
@@ -59,18 +76,31 @@ def send_download(
     content_type: str = "",
     size: int | None = None,
     force: bool = False,
-) -> DownloadRequest:
-    """Send a magnet to put.io and record it.
+) -> SendResult:
+    """Send a magnet to put.io and, for everything but adult content, record it.
 
     Raises DuplicateDownload if already sent (unless force), PutioError on
     transfer failure (after recording a FAILED row), and AdultContentNotPermitted
     if the user lacks the adult permission. The permission is enforced here
     rather than only in the view so the web UI and the JSON API can't diverge.
+
+    Adult sends write nothing to the database — no row on success, no row on
+    failure, not even the title. Two behaviours follow directly from keeping no
+    record, and are intended rather than missing: adult content has no duplicate
+    detection (sending the same torrent twice makes two put.io transfers, and
+    the API never answers 409 for it), and the adult section never shows an
+    "already sent" badge.
     """
-    if content_type == ADULT_CONTENT_TYPE and not user.has_perm("core.view_adult_content"):
+    is_adult = content_type == ADULT_CONTENT_TYPE
+
+    # Refuse before anything reaches put.io.
+    if is_adult and not user.has_perm("core.view_adult_content"):
         raise AdultContentNotPermitted("you do not have permission to send adult content")
 
-    if not force:
+    # An adult send leaves no row, so there is never one to find. Skipping the
+    # query outright also keeps the adult path from matching — and reporting —
+    # a *family* row that happens to share an info hash.
+    if not force and not is_adult:
         existing = (
             DownloadRequest.objects.filter(info_hash=info_hash, status=DownloadRequest.Status.SENT)
             .select_related("user")
@@ -86,6 +116,20 @@ def send_download(
         parent_id = putio.resolve_folder_path(folder_names)
         transfer = putio.add_transfer(magnet_uri, save_parent_id=parent_id)
     except putio.PutioError as exc:
+        if not is_adult:
+            DownloadRequest.objects.create(
+                user=user,
+                info_hash=info_hash,
+                title=title,
+                size=size,
+                magnet_uri=magnet_uri,
+                destination=destination,
+                status=DownloadRequest.Status.FAILED,
+                error=str(exc),
+            )
+        raise
+
+    if not is_adult:
         DownloadRequest.objects.create(
             user=user,
             info_hash=info_hash,
@@ -93,18 +137,12 @@ def send_download(
             size=size,
             magnet_uri=magnet_uri,
             destination=destination,
-            status=DownloadRequest.Status.FAILED,
-            error=str(exc),
+            putio_transfer_id=transfer.get("id"),
+            status=DownloadRequest.Status.SENT,
         )
-        raise
 
-    return DownloadRequest.objects.create(
-        user=user,
-        info_hash=info_hash,
+    return SendResult(
         title=title,
-        size=size,
-        magnet_uri=magnet_uri,
         destination=destination,
         putio_transfer_id=transfer.get("id"),
-        status=DownloadRequest.Status.SENT,
     )

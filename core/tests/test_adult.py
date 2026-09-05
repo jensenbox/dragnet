@@ -104,8 +104,8 @@ def test_family_download_endpoint_refuses_adult_content(client, plain_user):
     assert not DownloadRequest.objects.exists()
 
 
-@responses.activate
-def test_permitted_user_sends_adult_content_to_the_adult_folder(client, adult_user, settings):
+def _mock_adult_putio(settings, transfer_id=77, add_status=200):
+    """Wire up a put.io that resolves the adult folder and accepts the transfer."""
     settings.PUTIO_OAUTH_TOKEN = "test-token"
     responses.get(
         putio.FILES_LIST_URL,
@@ -114,16 +114,117 @@ def test_permitted_user_sends_adult_content_to_the_adult_folder(client, adult_us
             "files": [{"id": 900, "file_type": "FOLDER", "name": settings.PUTIO_ADULT_FOLDER}],
         },
     )
-    responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 77}})
+    if add_status == 200:
+        responses.post(
+            putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": transfer_id}}
+        )
+    else:
+        responses.post(putio.TRANSFERS_ADD_URL, json={"status": "ERROR"}, status=add_status)
+
+
+@responses.activate
+def test_permitted_user_sends_adult_content_to_the_adult_folder(client, adult_user, settings):
+    """The send still happens and still routes correctly — it is only unlogged."""
+    _mock_adult_putio(settings)
     responses.post(GRAPHQL_URL, json=search_payload([]))
 
     client.post(reverse("adult_download"), download_post_data(content_type="xxx"), follow=True)
 
-    request = DownloadRequest.objects.get()
-    assert request.destination == settings.PUTIO_ADULT_FOLDER
-    assert request.putio_transfer_id == 77
     add_call = [c for c in responses.calls if c.request.url == putio.TRANSFERS_ADD_URL][0]
     assert "save_parent_id=900" in add_call.request.body
+
+
+# --- adult sends are never recorded ----------------------------------------
+
+
+@responses.activate
+def test_adult_send_writes_no_row(adult_user, settings):
+    """The whole point: no title, no magnet, no row — not even for the sender."""
+    _mock_adult_putio(settings)
+
+    result = services.send_download(
+        adult_user,
+        info_hash="a" * 40,
+        title="Some Adult Title That Must Not Be Stored",
+        magnet_uri=MAGNET,
+        content_type="xxx",
+    )
+
+    assert not DownloadRequest.objects.exists()
+    # The caller still gets everything it needs to report the send.
+    assert result.destination == settings.PUTIO_ADULT_FOLDER
+    assert result.putio_transfer_id == 77
+    assert result.title == "Some Adult Title That Must Not Be Stored"
+
+
+@responses.activate
+def test_failed_adult_send_writes_no_row(adult_user, settings):
+    """The FAILED branch records a row for family sends; it must not for adult."""
+    _mock_adult_putio(settings, add_status=500)
+
+    with pytest.raises(putio.PutioError):
+        services.send_download(
+            adult_user,
+            info_hash="a" * 40,
+            title="Some Adult Title That Must Not Be Stored",
+            magnet_uri=MAGNET,
+            content_type="xxx",
+        )
+
+    assert not DownloadRequest.objects.exists()
+
+
+@responses.activate
+def test_adult_sends_are_never_duplicates(adult_user, settings):
+    """No row means no memory: the same hash sends twice, making two transfers."""
+    _mock_adult_putio(settings)
+
+    for _ in range(2):
+        services.send_download(
+            adult_user,
+            info_hash="a" * 40,
+            title="Same Thing Twice",
+            magnet_uri=MAGNET,
+            content_type="xxx",
+        )
+
+    add_calls = [c for c in responses.calls if c.request.url == putio.TRANSFERS_ADD_URL]
+    assert len(add_calls) == 2
+    assert not DownloadRequest.objects.exists()
+
+
+@responses.activate
+def test_family_sends_are_still_recorded(adult_user, settings):
+    """Guard the inverse: only adult content is exempt from logging."""
+    settings.PUTIO_OAUTH_TOKEN = "test-token"
+    responses.get(
+        putio.FILES_LIST_URL,
+        json={
+            "status": "OK",
+            "files": [
+                {
+                    "id": 901,
+                    "file_type": "FOLDER",
+                    "name": settings.PUTIO_UNCLASSIFIED_FOLDER,
+                }
+            ],
+        },
+    )
+    responses.post(putio.TRANSFERS_ADD_URL, json={"status": "OK", "transfer": {"id": 78}})
+
+    # music routes to the single root-level unclassified folder; the multi-level
+    # plex/* paths are covered by test_normal_routing_is_unchanged.
+    services.send_download(
+        adult_user,
+        info_hash="c" * 40,
+        title="Some Album",
+        magnet_uri=MAGNET,
+        content_type="music",
+    )
+
+    row = DownloadRequest.objects.get()
+    assert row.title == "Some Album"
+    assert row.putio_transfer_id == 78
 
 
 # --- search isolation ------------------------------------------------------
@@ -169,7 +270,9 @@ def _make_family_row(user, settings):
 
 
 def test_history_hides_adult_sends_from_the_rest_of_the_family(client, plain_user, settings):
-    """The shared log is read by everyone; adult titles must not appear on it."""
+    """Defence in depth: adult sends are no longer logged, but if a row exists
+    (written before that change, or by a future regression) it must not surface
+    on a page the whole family reads."""
     _make_adult_row(plain_user, settings)
     _make_family_row(plain_user, settings)
 
