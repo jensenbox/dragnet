@@ -39,7 +39,6 @@
         <th>Title</th>
         <th>Type</th>
         <th class="text-nowrap">Size</th>
-        <th>Destination</th>
         <th>Sent by</th>
         <th class="text-nowrap">When</th>
         <th>Status</th>
@@ -49,12 +48,14 @@
     <tbody>
       {% for dr in download_requests %}
       <tr>
-        <td class="cell-title fw-semibold">{{ dr.title }}</td>
+        <td class="cell-title">
+          <div class="fw-semibold">{{ dr.title }}</div>
+          {% if dr.destination %}<div class="small text-secondary"><code>{{ dr.destination }}/</code></div>{% endif %}
+        </td>
         <td class="cell-meta" data-label="Type">
           {% if dr.content_type %}<span class="badge text-bg-secondary">{{ dr.content_type }}</span>{% else %}—{% endif %}
         </td>
         <td class="cell-meta text-nowrap" data-label="Size">{% if dr.size %}{{ dr.size|filesizeformat }}{% else %}—{% endif %}</td>
-        <td class="cell-meta" data-label="To">{% if dr.destination %}<code>{{ dr.destination }}/</code>{% else %}—{% endif %}</td>
         <td class="cell-meta" data-label="By">{{ dr.user.username }}</td>
         <td class="cell-meta text-nowrap" data-label="When">{{ dr.created_at|date:"Y-m-d H:i" }}</td>
         <td class="cell-meta" data-label="Status">
@@ -71,7 +72,7 @@
         </td>
       </tr>
       {% empty %}
-      <tr class="is-empty"><td colspan="8" class="text-center text-secondary py-5">
+      <tr class="is-empty"><td colspan="7" class="text-center text-secondary py-5">
         {% if content_type or sender %}
         Nothing matches that filter.
         {% else %}
