@@ -302,14 +302,21 @@ def test_download_hides_legacy_adult_rows_from_the_family(client, requester, set
 
 
 @responses.activate
-def test_resolve_only_records_the_file_but_sends_nothing(row, settings):
-    """Used once before enabling the cron, so a backlog of already-finished
-    downloads doesn't mail everyone about books they got hours ago."""
+def test_catch_up_settles_the_backlog_without_sending(row, settings):
+    """Run once before enabling the cron. It must also mark the rows notified:
+    resolving alone would leave notified_at null and the very next run would
+    mail everyone about books they got days ago — the thing the flag exists to
+    prevent."""
     settings.PUTIO_OAUTH_TOKEN = "t"
     _configure_email(settings)
     _mock_finished_transfer()
-    call_command("notify_ready", "--resolve-only")
+    call_command("notify_ready", "--catch-up")
     row.refresh_from_db()
     assert row.putio_file_id == FILE_ID
-    assert row.notified_at is None
+    assert row.notified_at is not None
+    assert not [c for c in responses.calls if c.request.url == mail.SEND_URL]
+
+    # The follow-up run — the one the cron would do — must stay silent.
+    responses.post(mail.SEND_URL, json={"data": {"id": "x"}}, status=202)
+    call_command("notify_ready")
     assert not [c for c in responses.calls if c.request.url == mail.SEND_URL]

@@ -60,18 +60,19 @@ class Command(BaseCommand):
             help="Resolve and report, but write nothing and send nothing.",
         )
         parser.add_argument(
-            "--resolve-only",
+            "--catch-up",
             action="store_true",
             help=(
-                "Record the downloadable file for finished transfers but send no "
-                "email. Use it before enabling the cron so a backlog of already-"
-                "finished downloads doesn't mail everyone at once."
+                "Settle the backlog: record the downloadable file for everything "
+                "already finished and mark it notified WITHOUT emailing, so "
+                "enabling the cron doesn't mail people about downloads they got "
+                "days ago. Run once before the first real run."
             ),
         )
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        resolve_only = options["resolve_only"]
+        catch_up = options["catch_up"]
         cutoff = timezone.now() - MAX_AGE
         pending = (
             DownloadRequest.objects.filter(
@@ -116,14 +117,21 @@ class Command(BaseCommand):
                 row.putio_file_id = chosen["id"]
                 row.save(update_fields=["putio_file_id"])
 
-            if not resolve_only and self._notify(row, dry_run=dry_run):
+            if catch_up:
+                # Stamp it as notified without sending, or the next run would
+                # mail about it anyway — which is the whole point of the flag.
+                if not dry_run and not row.notified_at:
+                    row.notified_at = timezone.now()
+                    row.save(update_fields=["notified_at"])
+                continue
+            if self._notify(row, dry_run=dry_run):
                 notified += 1
 
         self.stdout.write(
             self.style.SUCCESS(
                 f"resolved={resolved} notified={notified} skipped={skipped}"
                 + (" (dry run, nothing written)" if dry_run else "")
-                + (" (resolve-only, no email sent)" if resolve_only else "")
+                + (" (catch-up: backlog marked notified, nothing sent)" if catch_up else "")
             )
         )
 

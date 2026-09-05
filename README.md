@@ -175,9 +175,20 @@ Download button.
 Adult sends never appear here — they write no `DownloadRequest` at all.
 
 ```bash
-docker compose exec web python manage.py notify_ready --dry-run  # report only
+docker compose exec web python manage.py notify_ready --dry-run   # report only
+docker compose exec web python manage.py notify_ready --catch-up  # settle backlog
 docker compose exec web python manage.py notify_ready
 ```
+
+Run `--catch-up` **once** before enabling the cron. It resolves everything
+already finished and marks it notified without sending, so turning the cron on
+doesn't mail the whole family about downloads they collected days ago. Resolving
+without stamping `notified_at` would not be enough — the next run would mail
+them anyway.
+
+The cron holds a `flock`, because an hourly job plus a slow put.io morning is
+otherwise two runs racing on the same rows, both seeing `notified_at` unset and
+both sending.
 
 ## Development
 
