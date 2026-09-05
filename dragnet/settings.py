@@ -141,7 +141,13 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+    # Manifest, not just Compressed: it stamps a content hash into each
+    # filename, so {% static %} emits a new URL whenever a file changes. Without
+    # it, dragnet.css keeps one URL forever and a browser that cached it never
+    # sees a CSS fix again — which is exactly what happened on 2026-09-05, when
+    # a deployed layout fix measured correct locally and had no effect in a real
+    # browser because it was still using a stale copy of the stylesheet.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
