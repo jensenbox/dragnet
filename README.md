@@ -141,6 +141,44 @@ Caveat worth knowing: the split is only as good as bitmagnet's classifier.
 Adult torrents it fails to classify stay in the `null` bucket and remain
 reachable from family search.
 
+## Getting a finished download to whoever asked for it
+
+Unclassified content (ebooks, audiobooks, comics, music, software, games) lands
+in `unclassified/<person>/` on put.io. `manage.py notify_ready`, run hourly by
+cron on the deploy host, does two things for each finished transfer:
+
+1. Resolves the transfer to a single downloadable file, which makes a
+   **Download** button appear next to that row in History. put.io wraps even
+   single-file torrents in a folder, so this walks down and prefers a readable
+   format (`.epub`, `.azw3`, `.mobi`, `.pdf`, `.cbz`, `.cbr`) over the cover art
+   and readme beside it, falling back to the largest file for a video.
+2. Emails the requester once — a link, not the file — if they have an address
+   and Telnyx is configured. `notified_at` guards against a second send.
+
+The link points at `/files/<id>/` on dragnet, not at put.io, so it sits behind
+the same Cloudflare Access login as everything else and no publicly fetchable
+URL is created. dragnet redirects to a short-lived signed put.io URL. From
+there, Amazon's Send to Kindle app is the last step, done by hand.
+
+**Why a link and not an attachment.** Telnyx's Email API rejects any request
+over 1,048,576 bytes with `Kafka payload exceeds size limit`, which leaves about
+786 KB of payload after base64 — smaller than every ebook in the library. Their
+own rate-limits page documents 25 MB. Measured 2026-09-05 on both a shared
+domain and our verified `mail.closient.com`: 1,014,175 bytes sent, 1,066,948
+bytes rejected. Re-test before ever attaching a file.
+
+Two put.io failure modes are handled rather than crashed on, both seen live:
+a transfer purged from put.io's history (`GET /transfers/{id}` 404s) and a file
+deleted since (`GET /files/{id}` 404s). Either just leaves the row without a
+Download button.
+
+Adult sends never appear here — they write no `DownloadRequest` at all.
+
+```bash
+docker compose exec web python manage.py notify_ready --dry-run  # report only
+docker compose exec web python manage.py notify_ready
+```
+
 ## Development
 
 ```bash

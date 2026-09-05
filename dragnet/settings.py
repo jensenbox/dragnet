@@ -57,6 +57,17 @@ DRAGNET_API_USERNAME = env.str("DRAGNET_API_USERNAME", default="claude")
 # from the request host once we're reachable at dragnet.jensenbox.com.
 BITMAGNET_DASHBOARD_URL = env.str("BITMAGNET_DASHBOARD_URL", default="")
 
+# --- "your download is ready" email (Telnyx) --------------------------------
+# Sending is disabled while either of these is empty, which is the right
+# default: notify_ready still resolves finished transfers so the Download
+# buttons appear, it just doesn't mail anyone.
+TELNYX_API_KEY = env.str("TELNYX_API_KEY", default="")
+TELNYX_EMAIL_FROM = env.str("TELNYX_EMAIL_FROM", default="")
+TELNYX_EMAIL_FROM_NAME = env.str("TELNYX_EMAIL_FROM_NAME", default="Dragnet")
+# Absolute base for links in those emails. The notifier runs on a cron with no
+# request to derive a host from, so it has to be configured.
+DRAGNET_PUBLIC_URL = env.str("DRAGNET_PUBLIC_URL", default="https://dragnet.jensenbox.com")
+
 # Cloudflare Access SSO. Both must be set for public logins to work; while
 # either is empty the Access middleware is inert and only Django login applies.
 # Team domain e.g. "jensenbox.cloudflareaccess.com"; AUD is the Access

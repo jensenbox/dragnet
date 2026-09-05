@@ -93,6 +93,15 @@ folder (`adult/`, outside the rclone-watched `plex/`). Two consequences for you:
   and nothing to check against beforehand — ask the user rather than assuming a
   re-send is safe.
 
+### Getting the file to a person
+
+Finished transfers are resolved hourly by `manage.py notify_ready`, which puts a
+Download button in History and emails the requester a link. It mails a **link,
+never an attachment**: Telnyx caps a request at 1,048,576 bytes (documented as
+25 MB — the docs are wrong), leaving ~786 KB after base64, which is smaller than
+every ebook in the library. Verified on both a shared domain and our own
+`mail.closient.com`.
+
 ### 4. Report
 
 Tell the user what was sent, to which folder, and anything skipped (duplicates,

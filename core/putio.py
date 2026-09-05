@@ -62,3 +62,72 @@ def add_transfer(magnet_uri: str, save_parent_id: int | None = None) -> dict[str
         data["save_parent_id"] = save_parent_id
     payload = _request("POST", TRANSFERS_ADD_URL, data=data)
     return payload["transfer"]
+
+
+TRANSFER_URL = f"{API_BASE}/transfers/{{id}}"
+FILE_URL = f"{API_BASE}/files/{{id}}"
+FILE_DOWNLOAD_URL = f"{API_BASE}/files/{{id}}/url"
+
+# put.io transfer statuses that mean the bytes have landed. SEEDING counts:
+# the download is complete and the client is now uploading back to the swarm.
+FINISHED_STATUSES = {"COMPLETED", "SEEDING"}
+
+# Extensions worth handing to someone who asked for a book, best first. Used to
+# pick one file out of a torrent that contains several.
+READABLE_EXTENSIONS = (".epub", ".azw3", ".mobi", ".pdf", ".cbz", ".cbr")
+
+
+def get_transfer(transfer_id: int) -> dict[str, Any]:
+    """Return the transfer object, which carries its status and saved file id."""
+    return _request("GET", TRANSFER_URL.format(id=transfer_id))["transfer"]
+
+
+def get_file(file_id: int) -> dict[str, Any]:
+    return _request("GET", FILE_URL.format(id=file_id))["file"]
+
+
+def list_folder(parent_id: int) -> list[dict[str, Any]]:
+    listing = _request("GET", FILES_LIST_URL, params={"parent_id": parent_id, "per_page": 1000})
+    return listing["files"]
+
+
+def pick_downloadable_file(file_id: int) -> dict[str, Any] | None:
+    """Resolve a transfer's saved file id to a single file someone can download.
+
+    put.io wraps even single-file torrents in a folder, so the id a transfer
+    reports is usually a FOLDER and /files/{id}/url returns NotFile for it. Walk
+    down and choose: a readable format first (an EPUB beats the cover art and
+    the readme that ship beside it), otherwise the largest file, which is the
+    right answer for a video or a single archive.
+
+    Returns None for an empty folder. Multi-book bundles necessarily return only
+    one file — the folder link in the UI is the honest answer for those.
+    """
+    entry = get_file(file_id)
+    if entry["file_type"] != "FOLDER":
+        return entry
+
+    candidates: list[dict[str, Any]] = []
+    stack = [file_id]
+    while stack:
+        for child in list_folder(stack.pop()):
+            if child["file_type"] == "FOLDER":
+                stack.append(child["id"])
+            else:
+                candidates.append(child)
+    if not candidates:
+        return None
+
+    def rank(f: dict[str, Any]) -> tuple[int, int]:
+        name = f["name"].lower()
+        for i, ext in enumerate(READABLE_EXTENSIONS):
+            if name.endswith(ext):
+                return (i, -(f.get("size") or 0))
+        return (len(READABLE_EXTENSIONS), -(f.get("size") or 0))
+
+    return sorted(candidates, key=rank)[0]
+
+
+def download_url(file_id: int) -> str:
+    """A short-lived signed URL for the file. put.io 400s if the id is a folder."""
+    return _request("GET", FILE_DOWNLOAD_URL.format(id=file_id))["url"]

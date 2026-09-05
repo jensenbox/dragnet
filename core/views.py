@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -150,6 +150,38 @@ def download(request):
 @permission_required(ADULT_PERMISSION, raise_exception=True)
 def adult_download(request):
     return _send(request, adult=True)
+
+
+@login_required
+def file_download(request, pk):
+    """Redirect to a short-lived put.io URL for a finished download.
+
+    The link in the "ready" email points here rather than at put.io directly,
+    so the file sits behind the same Cloudflare Access login as the rest of
+    dragnet and no publicly-fetchable URL is ever created. The signed URL we
+    redirect to expires on put.io's own schedule.
+
+    Any signed-in family member may fetch any row, which matches History: the
+    log is shared, so the titles are already visible to everyone who can see
+    this page. Adult sends have no row at all, and the exclusion below covers
+    legacy rows for anyone without the permission.
+    """
+    rows = DownloadRequest.objects.select_related("user")
+    if not request.user.has_perm(ADULT_PERMISSION):
+        rows = rows.exclude(destination=services.adult_destination())
+    download_request = get_object_or_404(rows, pk=pk)
+
+    if not download_request.putio_file_id:
+        messages.error(request, "That download isn't ready yet.")
+        return redirect("history")
+
+    try:
+        url = putio.download_url(download_request.putio_file_id)
+    except putio.PutioError as exc:
+        # Most likely the file has since been deleted from put.io.
+        messages.error(request, f"put.io could not provide that file: {exc}")
+        return redirect("history")
+    return redirect(url)
 
 
 @login_required

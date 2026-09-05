@@ -26,6 +26,14 @@ class DownloadRequest(models.Model):
     # bitmagnet could not classify.
     content_type = models.CharField(max_length=32, blank=True, default="")
     putio_transfer_id = models.BigIntegerField(null=True, blank=True)
+    # The single downloadable file chosen out of the finished transfer. Null
+    # until the transfer completes and notify_ready resolves it — put.io wraps
+    # even single-file torrents in a folder, so this is not the transfer's own
+    # file id. Stays null forever if put.io has since dropped the file.
+    putio_file_id = models.BigIntegerField(null=True, blank=True)
+    # Set once the "your download is ready" email has gone out, so a re-run of
+    # notify_ready cannot mail the same person twice.
+    notified_at = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.SENT)
     error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)

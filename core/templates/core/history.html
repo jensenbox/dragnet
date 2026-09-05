@@ -43,6 +43,7 @@
         <th>Sent by</th>
         <th class="text-nowrap">When</th>
         <th>Status</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -63,9 +64,14 @@
           <span class="badge text-bg-danger" title="{{ dr.error }}">Failed</span>
           {% endif %}
         </td>
+        <td class="cell-action text-lg-end">
+          {% if dr.putio_file_id %}
+          <a class="btn btn-sm btn-primary text-nowrap" href="{% url 'file_download' dr.pk %}">Download</a>
+          {% endif %}
+        </td>
       </tr>
       {% empty %}
-      <tr class="is-empty"><td colspan="7" class="text-center text-secondary py-5">
+      <tr class="is-empty"><td colspan="8" class="text-center text-secondary py-5">
         {% if content_type or sender %}
         Nothing matches that filter.
         {% else %}
