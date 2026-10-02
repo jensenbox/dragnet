@@ -54,22 +54,22 @@ superuser.
 
 ### What is deployed
 
-These resources exist in the **Closient Search Inc.** Cloudflare account
-(`54c3a2f6ad897a60b339b57c0863e2b6`) — the same account that holds
-closient.com, since `jensenbox.com` is a zone in it. They were created via the
-API, not the dashboard, and are **not** Terraform-managed (like the silverbullet
-tunnel next to them, and unlike everything under `closient.com`).
+These resources exist in the **Personal** Cloudflare account
+(`23283fbe99813455e1002b5db85de5c8`), which holds the `jensenbox.com`
+registration and zone (moved out of Closient Search Inc. on 2026-10-02,
+Closient C-6510). They were created via the API, not the dashboard, and are
+**not** Terraform-managed.
 
 | Resource | Value |
 |---|---|
-| Zone (`jensenbox.com`) | `703ffb36d85c7149e97d465689e53272` |
-| Tunnel `dragnet` | `8a7c7958-a8c9-4119-96ca-f5f60bc0fd5c` |
-| Access app | `b16b1930-ef50-472b-9c9e-cf8aeb035bde` |
-| Access AUD tag | `6b3365d64073252211f43872c5899464f0f7afe14ba831f7db422468a1a456ec` |
-| Access team domain | `closient.cloudflareaccess.com` |
+| Zone (`jensenbox.com`) | `7c641f50c9045964c99b146520a68194` |
+| Tunnel `dragnet` | `c8f14b3f-8dd9-400b-b65a-e455e7ed4ee5` |
+| Access app | `dae937f6-ef30-4bab-aca6-26e345e27276` |
+| Access AUD tag | `75cc922a8ce4250b57eaf3aeef0cde0550cd525354e50ac6fe1517944b916205` |
+| Access team domain | `jensenbox.cloudflareaccess.com` |
 | DNS | `dragnet` CNAME → `<tunnel id>.cfargotunnel.com`, proxied |
 | Ingress | `dragnet.jensenbox.com` → `http://web:8000` (compose service name) |
-| Allowed IdPs | Google, one-time PIN |
+| Allowed IdPs | one-time PIN (Google login was not carried over; it needs a GCP OAuth client registered against the Personal team domain) |
 
 The proxied CNAME takes precedence over the `*.jensenbox.com` wildcard A record
 that points at the home WAN address.
@@ -78,11 +78,8 @@ that points at the home WAN address.
 
 If any of the above is lost, recreate with an API token holding
 *Cloudflare Tunnel: Edit*, *Access: Apps and Policies: Edit*, and
-*DNS: Edit* on the jensenbox.com zone. Note the zone-scope trap: the account's
-existing tokens are scoped to a **specific list of zones** that does not include
-jensenbox.com, so a DNS write returns `10000 Authentication error` rather than a
-permission error. Mint a separate short-lived token scoped to this zone instead
-of widening a production credential.
+*DNS: Edit* on the jensenbox.com zone, minted in the Personal account. Mint a
+separate short-lived token scoped to this zone rather than widening anything.
 
 Order matters — create the Access application *before* the DNS record, so the
 hostname is never publicly resolvable without Access in front of it.
@@ -90,7 +87,7 @@ hostname is never publicly resolvable without Access in front of it.
 Verify with `dig +short dragnet.jensenbox.com` — it should return Cloudflare
 edge IPs (`104.x` / `172.67.x`) rather than the home WAN address, and
 `curl -sI https://dragnet.jensenbox.com/` should 302 to
-`closient.cloudflareaccess.com/cdn-cgi/access/login/...`.
+`jensenbox.cloudflareaccess.com/cdn-cgi/access/login/...`.
 
 The `cloudflared` service sits behind a compose profile, so the stack still
 comes up normally on a host with no tunnel token.
