@@ -69,7 +69,7 @@ Closient C-6510). They were created via the API, not the dashboard, and are
 | Access team domain | `jensenbox.cloudflareaccess.com` |
 | DNS | `dragnet` CNAME → `<tunnel id>.cfargotunnel.com`, proxied |
 | Ingress | `dragnet.jensenbox.com` → `http://web:8000` (compose service name) |
-| Allowed IdPs | one-time PIN (Google login was not carried over; it needs a GCP OAuth client registered against the Personal team domain) |
+| Allowed IdPs | Google (IdP `ab82d2e1-a8eb-4000-a05b-666b8be6adba`, OAuth client `654175337400-c1nf…` in the personal GCP project `the-jensens-363203`, redirect URI `https://jensenbox.cloudflareaccess.com/cdn-cgi/access/callback`) and one-time PIN (`3cf3945d-c698-413a-bf93-2ed44fd487b6`) |
 
 The proxied CNAME takes precedence over the `*.jensenbox.com` wildcard A record
 that points at the home WAN address.
